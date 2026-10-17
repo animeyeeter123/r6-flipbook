@@ -7,6 +7,7 @@ A free, frame-by-frame animation maker for Roblox **R6** and **R15** characters,
 - Pose every body part freely with arrows and rings, add frames with **+**, and play them back.
 - Linked animations (for example *Run start → Run*), in-betweens, mirror, live mirror, feet on ground, reverse, auto loop.
 - Markers and sound markers, extra arms and props, saved poses, a reference video behind the character.
+- **Trace from video:** drag joint dots onto the person in your reference video and the character copies the pose, frame by frame.
 - **Test for Roblox** shows the animation the way the game plays it.
 - Exports Roblox `KeyframeSequence` files (`.rbxmx`) that you can import into Roblox Studio.
 - Works offline. In Chrome or Edge, click **Install** in the address bar to get it as an app.
@@ -35,6 +36,9 @@ Everything stays on your own computer. Projects are saved in your browser; nothi
 - R6 Flipbook is not made by, endorsed by or affiliated with Roblox Corporation. "Roblox" is a trademark of Roblox Corporation.
 
 ## Updates
+
+**v1.3**
+- Added: trace poses from a video (Draw → Trace from video)
 
 **v1.2**
 - Added: R15 bodies (pick R6 or R15 when you start a new animation)

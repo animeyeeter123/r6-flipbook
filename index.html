@@ -130,6 +130,8 @@
   #drawBanner { position: absolute; left: 50%; top: 80px; transform: translateX(-50%); z-index: 30; display: none; padding: 10px 14px;
     align-items: center; gap: 10px; font-size: 14px; }
   #drawBanner b { color: var(--accent); }
+  #traceBanner { position: absolute; left: 50%; top: 80px; transform: translateX(-50%); z-index: 30; display: none; padding: 8px 12px; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px; font-size: 13px; width: max-content; max-width: calc(100% - 24px); }
+  #traceBanner b { color: var(--accent); }
   #ctx { position: fixed; z-index: 70; display: none; min-width: 210px; padding: 5px; }
   #ctx .item { display: flex; justify-content: space-between; gap: 16px; width: 100%; text-align: left; padding: 7px 10px; border-radius: 8px; font-size: 13px; }
   #ctx .item:hover:not(:disabled) { background: var(--soft); }
@@ -267,6 +269,7 @@
   <div class="row"><button class="small" id="refBack" title="Move the video back one video frame">◀ 1</button><button class="small" id="refFwd" title="Move the video forward one video frame">1 ▶</button><button class="small" id="refClear">Remove</button></div>
   <p>The video plays behind the character and follows your frames. Line up the camera with the video, then pose over it.</p>
   <input type="file" id="refFile" accept="video/*" style="display:none">
+  <div class="row" style="justify-content:flex-end;margin-top:10px"><button class="small accent" data-close>Done</button></div>
 </div>
 
 <div id="partsPanel" class="panel card">
@@ -321,6 +324,7 @@
   <div id="markerList"></div>
 </div>
 
+<div id="traceBanner" class="card"><span id="traceText"></span><button class="small" id="tracePrev" title="Previous frame (←)">◀ Back</button><button class="small accent" id="traceNext" title="Next frame (→); adds a frame at the end">Next frame ▶</button><button class="small" id="traceReset" title="Put the dots back on the character">Reset dots</button><button class="small" id="traceDone">Done</button></div>
 <div id="drawBanner" class="card"><span id="drawText"></span><button class="small" id="drawSkip">Skip</button><button class="small accent" id="drawDone">Done</button></div>
 
 <div id="hint">Click a body part to pose it · Right-click for more · Drag empty space to spin · Right-drag to pan · Scroll to zoom · Shift snaps</div>
@@ -400,6 +404,15 @@
   <textarea id="aiText" readonly spellcheck="false" style="width:100%;height:240px;margin-top:10px;font:12px/1.4 ui-monospace,Consolas,monospace;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--soft);color:var(--ink);resize:vertical"></textarea>
   <p>Always read what an AI suggests before using it, and keep a backup of your game.</p>
   <div class="actions"><button class="ghost" id="aiClose">Close</button><button class="primary" id="aiCopy">Copy message</button></div>
+</div></div>
+
+<!-- first time Draw is clicked -->
+<div class="modal" id="drawHelp"><div class="card" style="width:min(480px, calc(100% - 32px))">
+  <h2>How Draw works</h2>
+  <p style="font-size:13px;color:var(--ink)"><b>Draw a stick figure:</b> draw one line for each body part when it asks (torso, head, arms, legs). Each line sets where that part points. Fine-tune with the rings after.</p>
+  <p style="font-size:13px;color:var(--ink)"><b>Trace from video:</b> pick a video of someone moving. Dots appear on the character's joints. Drag each dot onto the same joint of the person in the video and the character copies it. Hollow dots haven't been moved yet. Press <b>Next frame</b> (or →) to move the video on and add a frame, then nudge only what moved.</p>
+  <p style="font-size:13px;color:var(--ink)">Tip: turn the camera to match the video first (Side view for runs). You can still click body parts and use the arrows and rings while tracing.</p>
+  <div class="actions"><button class="primary" id="drawHelpOk">Got it</button></div>
 </div></div>
 
 <!-- share link -->

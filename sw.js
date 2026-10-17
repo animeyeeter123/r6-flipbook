@@ -1,6 +1,6 @@
 // Offline support: keeps a copy of the app's own files so it opens without internet.
 // Bump VERSION whenever any file changes, so people get the update the next time they open the app online.
-const VERSION = 'r6flipbook-v3.3.0';
+const VERSION = 'r6flipbook-v3.4.1';
 const FILES = ['./', 'index.html', 'app.js', 'manifest.webmanifest', 'vendor/three.module.js', 'vendor/OrbitControls.js',
                'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png'];
 

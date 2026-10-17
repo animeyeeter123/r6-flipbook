@@ -1165,7 +1165,9 @@ $('refFile').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
   if (refUrl) URL.revokeObjectURL(refUrl);
   refUrl = URL.createObjectURL(f); refVideo.src = refUrl; refStart = 0;
-  refVideo.onloadedmetadata = () => { $('refStart').max = refVideo.duration; $('refStart').value = 0; $('refTime').textContent = '0.00s'; $('refShow').checked = true; refApply(); toast('Video loaded. Line up the camera with it.'); };
+  refVideo.onloadedmetadata = () => { $('refStart').max = refVideo.duration; $('refStart').value = 0; $('refTime').textContent = '0.00s'; $('refShow').checked = true; refApply();
+    if (traceAfterLoad && project) { closePanels(); startTrace(); toast('Video loaded. Line up the camera, then drag the dots.'); }
+    else toast('Video loaded. Line up the camera with it.'); };
   e.target.value = '';
 };
 $('refShow').onchange = refApply;
@@ -1324,14 +1326,14 @@ function screenToWorld(p) {
   const center = new V3().applyMatrix4(frames[cur].P[RIG.root]), n = camera.getWorldDirection(new V3());
   return ray.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(n, center), new V3());
 }
-function applyStroke(n, a, b) {
+function applyStroke(n, a, b, reach) {
   const P = frames[cur].P, d = defs[n];
   const q = new Q(), t = new V3(), s = new V3(); P[n].decompose(t, q, s);
   if (n === RIG.root) {
     const up = a.clone().sub(b).normalize(), cu = new V3(0, 1, 0).applyQuaternion(q);
     placePart(P, n, new M4().compose(a.clone().add(b).multiplyScalar(0.5), new Q().setFromUnitVectors(cu, up).multiply(q), new V3(1, 1, 1)));
   } else {
-    const dir = b.clone().sub(a).normalize(), now = new V3(...d.reach).applyQuaternion(q).normalize();
+    const dir = b.clone().sub(a).normalize(), now = (reach || new V3(...d.reach)).clone().applyQuaternion(q).normalize();
     const nq = new Q().setFromUnitVectors(now, dir).multiply(q);
     const socket = new V3(...d.joint).applyMatrix4(P[d.parent].clone().multiply(d.restRel));
     placePart(P, n, new M4().compose(socket.clone().sub(new V3(...d.joint).applyQuaternion(nq)), nq, new V3(1, 1, 1)));
@@ -1351,7 +1353,214 @@ drawLayer.addEventListener('pointerup', () => {
   nextDrawStep();
 });
 function nextDrawStep() { drawStep++; if (drawStep >= drawSteps.length) endDraw(); else drawPrompt(); }
-$('draw').onclick = startDraw;
+$('draw').onclick = e => {
+  if (tracing) return endTrace();
+  if (drawing) return endDraw();
+  if (!settings.drawHelpSeen) { $('drawHelp').style.display = 'flex'; return; }
+  const r = e.currentTarget.getBoundingClientRect();
+  showMenu(r.left - 60, r.bottom + 6, [
+    { label: 'Draw a stick figure', action: startDraw },
+    { label: refLoaded() ? 'Trace from video' : 'Trace from video (pick a video)', action: startTrace },
+  ]);
+};
+// ================================================================== trace from video: drag joint dots onto the person in the video
+// Each dot is a joint. The character copies the directions between the dots (in the plane facing the camera),
+// so the camera should look at the character from the same side the video was filmed.
+const TRACE_POINTS = {
+  R6: { head: ['Head', [0, 0.6, 0]], neck: ['Torso', [0, 1, 0]], hips: ['Torso', [0, -1, 0]],
+        rShoulder: ['Right Arm', [0, 0.5, 0]], rHand: ['Right Arm', [0, -1, 0]], lShoulder: ['Left Arm', [0, 0.5, 0]], lHand: ['Left Arm', [0, -1, 0]],
+        rHip: ['Right Leg', [0, 1, 0]], rFoot: ['Right Leg', [0, -1, 0]], lHip: ['Left Leg', [0, 1, 0]], lFoot: ['Left Leg', [0, -1, 0]] },
+  R15: { head: ['Head', [0, 0.59, 0]], neck: ['Head', [0, -0.5758, 0]], hips: ['LowerTorso', [0, -0.2, 0]],
+         rShoulder: ['RightUpperArm', [-0.5005, 0.4189, 0]], rElbow: ['RightLowerArm', [0, 0.2747, 0]], rHand: ['RightHand', [0, -0.16, 0]],
+         lShoulder: ['LeftUpperArm', [0.5005, 0.4189, 0]], lElbow: ['LeftLowerArm', [0, 0.2747, 0]], lHand: ['LeftHand', [0, -0.16, 0]],
+         rHip: ['RightUpperLeg', [0, 0.4714, 0]], rKnee: ['RightLowerLeg', [0, 0.4134, 0]], rFoot: ['RightFoot', [0, -0.155, 0]],
+         lHip: ['LeftUpperLeg', [0, 0.4714, 0]], lKnee: ['LeftLowerLeg', [0, 0.4134, 0]], lFoot: ['LeftFoot', [0, -0.155, 0]] },
+};
+// which part points from which dot to which dot (the first entry places and turns the whole body)
+const TRACE_SOLVE = {
+  R6: [['Torso', 'neck', 'hips'], ['Head', 'neck', 'head'], ['Right Arm', 'rShoulder', 'rHand'], ['Left Arm', 'lShoulder', 'lHand'],
+       ['Right Leg', 'rHip', 'rFoot'], ['Left Leg', 'lHip', 'lFoot']],
+  R15: [['LowerTorso', 'neck', 'hips'], ['UpperTorso', 'hips', 'neck'], ['Head', 'neck', 'head'],
+        ['RightUpperArm', 'rShoulder', 'rElbow'], ['RightLowerArm', 'rElbow', 'rHand'], ['LeftUpperArm', 'lShoulder', 'lElbow'], ['LeftLowerArm', 'lElbow', 'lHand'],
+        ['RightUpperLeg', 'rHip', 'rKnee'], ['RightLowerLeg', 'rKnee', 'rFoot'], ['LeftUpperLeg', 'lHip', 'lKnee'], ['LeftLowerLeg', 'lKnee', 'lFoot']],
+};
+const TRACE_LINES = { R6: [['head', 'neck'], ['neck', 'hips'], ['neck', 'rShoulder'], ['rShoulder', 'rHand'], ['neck', 'lShoulder'], ['lShoulder', 'lHand'],
+                           ['hips', 'rHip'], ['rHip', 'rFoot'], ['hips', 'lHip'], ['lHip', 'lFoot']],
+                      R15: [['head', 'neck'], ['neck', 'hips'], ['neck', 'rShoulder'], ['rShoulder', 'rElbow'], ['rElbow', 'rHand'], ['neck', 'lShoulder'], ['lShoulder', 'lElbow'], ['lElbow', 'lHand'],
+                            ['hips', 'rHip'], ['rHip', 'rKnee'], ['rKnee', 'rFoot'], ['hips', 'lHip'], ['lHip', 'lKnee'], ['lKnee', 'lFoot']] };
+const TRACE_LABEL = { head: 'Head', neck: 'Neck', hips: 'Hips', rShoulder: 'R shoulder', rElbow: 'R elbow', rHand: 'R hand', lShoulder: 'L shoulder', lElbow: 'L elbow',
+                      lHand: 'L hand', rHip: 'R hip', rKnee: 'R knee', rFoot: 'R foot', lHip: 'L hip', lKnee: 'L knee', lFoot: 'L foot' };
+let tracing = false, tracePts = null, tracePlaced = new Set(), traceDrag = null, traceHover = null;
+let traceFrame = null, traceSeen = null, traceCam = '', traceCarry = null, traceAfterLoad = false;
+const traceMemory = new WeakMap();      // frame -> { pts, placed } (kept while the app is open)
+// Dots only aim body parts: moving a dot turns the part that reaches to it (and nothing else).
+// Dots you haven't moved yet (hollow) just follow the body. The normal part handles keep working while tracing.
+function poseToDots(P) {
+  const out = {};
+  for (const [k, [part, local]] of Object.entries(TRACE_POINTS[RIG.name])) {
+    const v = new V3(...local).applyMatrix4(P[part]).project(camera);
+    out[k] = [(v.x + 1) / 2, (1 - v.y) / 2];
+  }
+  return out;
+}
+const jointWorld = (P, k) => { const [part, local] = TRACE_POINTS[RIG.name][k]; return new V3(...local).applyMatrix4(P[part]); };
+function dotOnPlane(k, through) {      // where dot k sits on a flat sheet facing the camera, through a point
+  ndc.set(tracePts[k][0] * 2 - 1, -tracePts[k][1] * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  return ray.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new V3()), through), new V3());
+}
+function aimPart(P, n, a, b) {         // turn part n so the line from joint a to joint b points the way the dots do
+  if (!P[n]) return;
+  const from = jointWorld(P, a), A = tracePlaced.has(a) ? dotOnPlane(a, from) : from, B = dotOnPlane(b, from);
+  if (!A || !B || A.distanceTo(B) < 1e-3) return;
+  const q = new Q(); P[n].decompose(new V3(), q, new V3());
+  const reach = jointWorld(P, b).sub(from).applyQuaternion(q.clone().invert());   // the real joint-to-joint line inside the part
+  if (n === RIG.root) {                 // turn the whole body around the hips
+    const now = reach.clone().applyQuaternion(q).normalize(), dir = B.clone().sub(A).normalize();
+    const R = new M4().makeRotationFromQuaternion(new Q().setFromUnitVectors(now, dir));
+    const M = new M4().makeTranslation(from.x, from.y, from.z).multiply(R).multiply(new M4().makeTranslation(-from.x, -from.y, -from.z));
+    for (const p of order) P[p] = M.clone().multiply(P[p]);
+  } else applyStroke(n, A, B, reach);
+}
+function moveBody(P, k) {               // dragging the hips moves the whole body
+  const before = jointWorld(P, k), to = dotOnPlane(k, before);
+  if (!to) return;
+  const M = new M4().makeTranslation(to.x - before.x, to.y - before.y, to.z - before.z);
+  for (const n of order) P[n] = M.clone().multiply(P[n]);
+}
+function applyTrace(k) {
+  const P = frames[cur].P, S = TRACE_SOLVE[RIG.name];
+  if (k === 'hips') moveBody(P, 'hips');
+  for (const [n, a, b] of S) {
+    if (n === RIG.root) { if (k === 'neck') aimPart(P, n, 'hips', 'neck'); continue; }   // the neck dot leans the body
+    if (n === 'UpperTorso') continue;
+    if (b === k || (a === k && tracePlaced.has(b))) aimPart(P, n, a, b);
+  }
+  if (k === 'neck' || k === 'hips') for (const [n, a, b] of S)      // limbs keep pointing at dots you already placed
+    if (n !== RIG.root && n !== 'UpperTorso' && b !== k && a !== k && tracePlaced.has(b)) aimPart(P, n, a, b);
+  body.show(viewPose(P));
+  traceSync(true);
+}
+function traceSave() { if (tracePts && project) traceMemory.set(frames[cur], { pts: JSON.parse(JSON.stringify(tracePts)), placed: [...tracePlaced] }); }
+// keeps the dots in step with the body, the camera and the current frame (runs every screen refresh while tracing)
+function traceSync(afterTrace) {
+  if (!tracing || !project) return;
+  if (traceFrame !== frames[cur]) {
+    traceFrame = frames[cur];
+    const m = traceMemory.get(traceFrame), keep = traceCarry; traceCarry = null;
+    if (m) { tracePts = JSON.parse(JSON.stringify(m.pts)); tracePlaced = new Set(m.placed); }
+    else if (keep) { tracePts = JSON.parse(JSON.stringify(keep.pts)); tracePlaced = new Set(keep.placed); }
+    else { tracePts = poseToDots(frames[cur].P); tracePlaced = new Set(); }
+    traceSeen = null;
+    $('traceText').innerHTML = `Frame <b>${cur + 1}</b> of ${frames.length} · Drag dots to aim, or click a part to move it`;
+    $('tracePrev').disabled = cur === 0;
+    afterTrace = true;
+  }
+  camera.updateMatrixWorld();
+  const cam = camera.matrixWorld.elements.concat(camera.projectionMatrix.elements).map(v => v.toFixed(5)).join();
+  const now = poseToDots(frames[cur].P);
+  let moved = false;
+  if (!traceSeen || cam !== traceCam || afterTrace) {           // camera moved or dots were dragged: placed dots stay on the video
+    for (const k in now) if (!tracePlaced.has(k) && (tracePts[k][0] !== now[k][0] || tracePts[k][1] !== now[k][1])) { tracePts[k] = now[k]; moved = true; }
+  } else {
+    for (const k in now)                                           // the body was moved with the handles: its dots follow
+      if (k !== traceDrag && Math.hypot(now[k][0] - traceSeen[k][0], now[k][1] - traceSeen[k][1]) > 1e-4) { tracePts[k] = now[k]; moved = true; }
+  }
+  traceSeen = now; traceCam = cam;
+  if (moved || afterTrace) { drawTrace(); traceSave(); }
+}
+function drawTrace() {
+  dctx.clearRect(0, 0, drawLayer.width, drawLayer.height);
+  if (!tracePts) return;
+  const w = drawLayer.width, h = drawLayer.height, px = k => [tracePts[k][0] * w, tracePts[k][1] * h];
+  dctx.lineCap = 'round'; dctx.lineWidth = 3; dctx.strokeStyle = 'rgba(255,255,255,.85)';
+  for (const [a, b] of TRACE_LINES[RIG.name]) { const [x1, y1] = px(a), [x2, y2] = px(b); dctx.beginPath(); dctx.moveTo(x1, y1); dctx.lineTo(x2, y2); dctx.stroke(); }
+  dctx.font = '600 11px system-ui, sans-serif'; dctx.textBaseline = 'middle';
+  for (const k of Object.keys(tracePts)) {
+    const [x, y] = px(k), on = k === traceDrag || k === traceHover, col = k[0] === 'r' ? '#ff5a5a' : k[0] === 'l' ? '#3d8bff' : settings.accent;
+    dctx.beginPath(); dctx.arc(x, y, on ? 9 : 7, 0, Math.PI * 2);
+    if (tracePlaced.has(k)) { dctx.fillStyle = col; dctx.fill(); dctx.lineWidth = 2; dctx.strokeStyle = '#fff'; }
+    else { dctx.fillStyle = 'rgba(255,255,255,.85)'; dctx.fill(); dctx.lineWidth = 3; dctx.strokeStyle = col; }   // not placed yet
+    dctx.stroke();
+    if (on) { dctx.fillStyle = '#fff'; dctx.strokeStyle = 'rgba(0,0,0,.7)'; dctx.lineWidth = 3; dctx.strokeText(TRACE_LABEL[k], x + 13, y); dctx.fillText(TRACE_LABEL[k], x + 13, y); }
+  }
+}
+function traceDotAt(e) {
+  const r = drawLayer.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  let best = null, bd = 14;
+  for (const k of Object.keys(tracePts)) { const d = Math.hypot(tracePts[k][0] * r.width - x, tracePts[k][1] * r.height - y); if (d < bd) { bd = d; best = k; } }
+  return best;
+}
+function startTrace() {
+  if (!refLoaded()) { traceAfterLoad = true; toast('Pick the video to trace'); $('refFile').click(); return; }
+  traceAfterLoad = false;
+  if (testMode) setTest(false);
+  stopPlay(); closePanels();
+  $('refShow').checked = true; refApply();
+  tracing = true; traceFrame = null; traceCarry = null;
+  drawLayer.style.display = 'block'; drawLayer.style.pointerEvents = 'none';
+  $('traceBanner').style.display = 'flex'; $('draw').classList.add('on');
+  sizeDrawLayer(); traceSync();
+  $('hint').textContent = 'Line up the camera with the video first (Side view for runs). Red = right side, blue = left side.';
+}
+function endTrace() {
+  if (!tracing) return;
+  traceSave();
+  tracing = false; traceDrag = null; tracePts = null; traceFrame = null;
+  drawLayer.style.display = 'none'; drawLayer.style.pointerEvents = ''; drawLayer.style.cursor = ''; view.style.cursor = '';
+  $('traceBanner').style.display = 'none'; $('draw').classList.remove('on');
+  $('hint').textContent = HINT;
+  dctx.clearRect(0, 0, drawLayer.width, drawLayer.height);
+  if (project) { thumbStore.set(anim().id, frames.map(f => renderPoseImage(f.P))); refresh(); saveSoon(); }
+}
+function traceStep(dir) {
+  if (dir < 0 && cur === 0) return;
+  traceSave();
+  const keep = { pts: JSON.parse(JSON.stringify(tracePts)), placed: [...tracePlaced] };
+  renderThumb(cur);
+  if (dir > 0 && cur === frames.length - 1) {          // add the next frame, starting from this pose and these dots
+    stopPlay(); record();
+    frames.push(newFrame(clonePose(frames[cur].P)));
+    thumbsOf(anim()).push(thumbsOf(anim())[cur]);
+    traceCarry = keep;
+  }
+  cur += dir; fsel = new Set(); refresh(); traceSync(); saveSoon();
+}
+// dots are grabbed before the 3D view sees the click; anywhere else works as normal (click parts, handles, camera)
+view.addEventListener('pointerdown', e => {
+  if (!tracing || e.button !== 0 || !tracePts || e.target !== renderer.domElement) return;
+  const k = traceDotAt(e);
+  if (!k) return;
+  e.stopPropagation(); e.preventDefault();
+  stopPlay(); record(); traceDrag = k; tracePlaced.add(k);
+  try { view.setPointerCapture(e.pointerId); } catch {}
+  drawTrace();
+}, true);
+view.addEventListener('pointermove', e => {
+  if (!tracing || !tracePts) return;
+  if (!traceDrag) {
+    const h = e.buttons || e.target !== renderer.domElement ? null : traceDotAt(e);
+    if (h !== traceHover) { traceHover = h; view.style.cursor = h ? 'grab' : ''; drawTrace(); }
+    return;
+  }
+  e.stopPropagation();
+  const r = drawLayer.getBoundingClientRect();
+  tracePts[traceDrag] = [Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))];
+  applyTrace(traceDrag);
+}, true);
+const traceRelease = e => {
+  if (!tracing || !traceDrag) return;
+  e.stopPropagation();
+  traceDrag = null; traceSync(true); changed();
+};
+view.addEventListener('pointerup', traceRelease, true);
+view.addEventListener('pointercancel', traceRelease, true);
+$('tracePrev').onclick = () => traceStep(-1);
+$('traceNext').onclick = () => traceStep(1);
+$('traceReset').onclick = () => { traceMemory.delete(frames[cur]); traceFrame = null; traceSync(); };
+$('traceDone').onclick = endTrace;
+$('drawHelpOk').onclick = () => { settings.drawHelpSeen = true; saveSettings(); $('drawHelp').style.display = 'none'; $('draw').click(); };
+
 $('drawSkip').onclick = nextDrawStep;
 $('drawDone').onclick = endDraw;
 const HINT = $('hint').textContent;
@@ -1832,7 +2041,7 @@ async function openProject(p, fresh) {
 }
 async function showHome() {
   if (project) { stopPlay(); await saveNow(); }
-  project = null; closePanels(); hideMenu(); select(null);
+  endTrace(); project = null; closePanels(); hideMenu(); select(null);
   $('home').style.display = 'block';
   const list = (await db.all()).sort((a, b) => b.updated - a.updated);
   const g = $('projGrid'); g.innerHTML = '';
@@ -1993,6 +2202,7 @@ const TOUR = [
   { el: null, text: '<b>Welcome to R6 Flipbook!</b> You make Roblox R6 and R15 animations frame by frame, like FlipaClip. This quick tour takes about 30 seconds.' },
   { el: '#view', text: '<b>Pose the character.</b> Click any body part. Drag the <b>arrows</b> to move it and the <b>rings</b> to turn it. Drag empty space to spin the camera.' },
   { el: '#add', text: '<b>Add frames.</b> Press <b>+</b> to add the next frame. It starts as a copy, so you only change what moves.' },
+  { el: '#draw', text: '<b>Draw.</b> Sketch a quick stick figure, or trace a person from a video. Click it any time and it explains how.' },
   { el: '#play', text: '<b>Watch it.</b> Press play. You can slow it down or speed it up with Play speed.' },
   { el: '#strip', text: '<b>Right-click for more.</b> Right-click a frame or the character for in-betweens, reverse, feet on ground, markers, mirror and more. Ctrl-click or Shift-click frames to pick several.' },
   { el: '#animCard', text: '<b>Your animations.</b> A project can hold linked parts, like Run start → Run. Pick which one you\'re editing here. <b>Test for Roblox</b> shows it the way the game plays it.' },
@@ -2055,6 +2265,11 @@ window.addEventListener('keydown', e => {
   if ([...document.querySelectorAll('.modal')].some(m => m.style.display === 'flex')) { if (e.key === 'Escape') document.querySelectorAll('.modal').forEach(m => m.style.display = 'none'); return; }
   if (!project) return;
   if (drawing) { if (e.key === 'Escape') endDraw(); return; }
+  if (tracing && !(e.ctrlKey || e.metaKey)) {
+    if (e.key === 'Escape' && !selected) { endTrace(); return; }
+    if (e.key === 'ArrowRight') { traceStep(1); return; }
+    if (e.key === 'ArrowLeft') { traceStep(-1); return; }
+  }
   const ctrl = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
   if (ctrl && k === 'z' && !e.shiftKey) { undo(); e.preventDefault(); }
   else if (ctrl && (k === 'y' || (k === 'z' && e.shiftKey))) { redo(); e.preventDefault(); }
@@ -2080,6 +2295,7 @@ function resize() {
   if (!w || !h) return;
   renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
   if (drawing) { sizeDrawLayer(); redrawStrokes(); }
+  if (tracing) { sizeDrawLayer(); traceSeen = null; traceSync(true); }
 }
 new ResizeObserver(resize).observe(view); resize();
 applyTheme();
@@ -2094,8 +2310,9 @@ renderer.setAnimationLoop(now => {
     controls.update();
     placeGizmo();
     renderer.render(scene, camera);
+    if (tracing) traceSync();
   }
 });
 // test hook (used to check the maths); harmless for normal use
 window.R6Flipbook = { get project() { return project; }, get frames() { return frames; }, get order() { return order; }, get A() { return A; }, get cur() { return cur; },
-  transformsFromWorlds, worldsFromTransforms, buildRbxmx, rbxmxToAnim, mirrorPose, centered, poseAtTime, buildPlay, setPlay: p => play = p, db, projectFromOld, openProject, showHome, aiPrompt, makeShareLink, openSharedLink, makeGif };
+  transformsFromWorlds, worldsFromTransforms, buildRbxmx, rbxmxToAnim, mirrorPose, centered, poseAtTime, buildPlay, setPlay: p => play = p, db, projectFromOld, openProject, showHome, aiPrompt, makeShareLink, openSharedLink, makeGif, get tracePts() { return tracePts; }, poseToDots };
