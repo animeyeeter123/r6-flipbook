@@ -360,6 +360,10 @@
   <button class="choice rec" id="exCenter"><b>Center the torso</b><span>The body stays on the character's real spot in the game, the way Roblox plays animations. Use it for runs, walks, idles, jumps and most attacks. Your poses don't change; only drifting across the floor is removed.</span></button>
   <button class="choice" id="exKeep"><b>Keep motion</b><span>Exactly as you animated it, including moving across the floor. Use it for moves that should travel inside the animation, like a cutscene or an emote that steps forward and back.</span></button>
   <p id="exWhere"></p>
+  <h4 style="margin:16px 0 4px;font-size:14px">Or share it</h4>
+  <div class="row" style="color:var(--ink)"><button class="small accent" id="shGif" title="An animated picture that plays in Discord">GIF</button><button class="small accent" id="shVid" title="A short video (MP4 or WebM)">Video</button><button class="small" id="shLink" title="A link that opens this animation in R6 Flipbook">Copy share link</button>
+    <select id="shSize" title="Picture size"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large (HD)</option></select></div>
+  <p>GIFs and videos use the current camera view. Turn on Test for Roblox first if you want the character to stay in place.</p>
   <div class="actions"><button class="ghost" id="exCancel">Cancel</button></div>
 </div></div>
 
@@ -394,6 +398,14 @@
   <textarea id="aiText" readonly spellcheck="false" style="width:100%;height:240px;margin-top:10px;font:12px/1.4 ui-monospace,Consolas,monospace;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--soft);color:var(--ink);resize:vertical"></textarea>
   <p>Always read what an AI suggests before using it, and keep a backup of your game.</p>
   <div class="actions"><button class="ghost" id="aiClose">Close</button><button class="primary" id="aiCopy">Copy message</button></div>
+</div></div>
+
+<!-- share link -->
+<div class="modal" id="linkModal"><div class="card">
+  <h2>Share link</h2>
+  <input type="text" id="linkText" readonly spellcheck="false" style="width:100%;font:12px ui-monospace,Consolas,monospace">
+  <p id="linkNote"></p>
+  <div class="actions"><button class="ghost" id="linkClose">Close</button><button class="primary" id="linkCopy">Copy link</button></div>
 </div></div>
 
 <!-- in-betweens -->

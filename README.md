@@ -10,6 +10,7 @@ A free, frame-by-frame animation maker for Roblox **R6** characters, in the styl
 - **Test for Roblox** shows the animation the way the game plays it.
 - Exports Roblox `KeyframeSequence` files (`.rbxmx`) that you can import into Roblox Studio.
 - Works offline. In Chrome or Edge, click **Install** in the address bar to get it as an app.
+- Share your animation as a **GIF**, a **video**, or a **link** that opens it in R6 Flipbook.
 
 ## Install it as an app
 
@@ -32,6 +33,16 @@ Everything stays on your own computer. Projects are saved in your browser; nothi
 
 - 3D rendering: [three.js](https://threejs.org) (MIT licence, see `vendor/THREE-LICENSE.txt`).
 - R6 Flipbook is not made by, endorsed by or affiliated with Roblox Corporation. "Roblox" is a trademark of Roblox Corporation.
+
+## Updates
+
+**v1.1**
+- Added: share as GIF or video (under Export)
+- Added: share by link
+- Added: setup message for AI helpers after exporting
+
+**v1.0**
+- First release
 
 ## Licence
 

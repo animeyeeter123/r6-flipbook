@@ -1479,6 +1479,218 @@ $('exCenter').onclick = () => doExport(true);
 $('exKeep').onclick = () => doExport(false);
 $('exCancel').onclick = () => $('exportModal').style.display = 'none';
 
+
+// ================================================================== share: GIF, video and links
+// One play-through of the chosen animations, in order. Returns the pose at p frames from the start.
+function shareSeq(list) {
+  const lens = list.map(animSlots), total = lens.reduce((a, b) => a + b, 0);
+  return { total, at(p) {
+    p = Math.max(0, Math.min(p, total - 1e-6));
+    for (let k = 0; k < list.length; k++) {
+      if (p < lens[k] || k === list.length - 1) {
+        const a = list[k], next = list[k + 1] ? list[k + 1].frames[0].P : (a.loop ? a.frames[0].P : null);
+        return poseInAnim(a, Math.min(p, lens[k] - 1e-6), next).P;
+      }
+      p -= lens[k];
+    }
+  } };
+}
+const SHARE_SIZES = { small: [480, 360], medium: [640, 480], large: [1280, 720] };
+let shareRenderer = null;
+function shareCanvas(w, h) {
+  if (!shareRenderer) shareRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+  shareRenderer.setPixelRatio(1); shareRenderer.setSize(w, h, false);
+  const c2 = document.createElement('canvas'); c2.width = w; c2.height = h;
+  const cam = camera.clone(); cam.aspect = w / h; cam.updateProjectionMatrix();
+  const g = c2.getContext('2d', { willReadFrequently: true });
+  return { c2, g, draw(P) {
+    const keep = { gizmo: gizmo.visible, bg: scene.background, ground: ground.visible };
+    gizmo.visible = false; scene.background = BG; ground.visible = true;
+    ghostPrev.show(P, false); ghostNext.show(P, false);
+    body.show(viewPose(P)); scene.updateMatrixWorld();
+    shareRenderer.render(scene, cam);
+    gizmo.visible = keep.gizmo; scene.background = keep.bg; ground.visible = keep.ground;
+    g.drawImage(shareRenderer.domElement, 0, 0, w, h);
+    const fs = Math.max(11, Math.round(h / 30));
+    g.font = `600 ${fs}px system-ui, sans-serif`; g.textAlign = 'right'; g.textBaseline = 'bottom';
+    g.fillStyle = isDark() ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.4)';
+    g.fillText('R6 Flipbook', w - fs * 0.8, h - fs * 0.6);
+  } };
+}
+// --- a small GIF maker (GIF89a, 256 colours, loops forever)
+function makeGif(images, w, h, delayCs) {
+  const counts = new Map();
+  for (const im of images) { const d = im.data; for (let i = 0; i < d.length; i += 8) { const k = (d[i] >> 3) << 10 | (d[i + 1] >> 3) << 5 | (d[i + 2] >> 3); counts.set(k, (counts.get(k) || 0) + 1); } }
+  const keys = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 256).map(e => e[0]);
+  const pal = keys.map(k => [(k >> 10 & 31) * 8 + 4, (k >> 5 & 31) * 8 + 4, (k & 31) * 8 + 4]);
+  while (pal.length < 256) pal.push([0, 0, 0]);
+  const near = new Int16Array(32768).fill(-1);
+  const lookup = k => {
+    if (near[k] >= 0) return near[k];
+    const r = (k >> 10 & 31) * 8 + 4, g = (k >> 5 & 31) * 8 + 4, b = (k & 31) * 8 + 4;
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < keys.length; i++) { const p = pal[i], dd = (p[0] - r) ** 2 + (p[1] - g) ** 2 + (p[2] - b) ** 2; if (dd < bd) { bd = dd; best = i; } }
+    return near[k] = best;
+  };
+  const out = [];
+  const u16 = v => out.push(v & 255, v >> 8 & 255);
+  for (const c of 'GIF89a') out.push(c.charCodeAt(0));
+  u16(w); u16(h); out.push(0xF7, 0, 0);
+  for (const p of pal) out.push(p[0], p[1], p[2]);
+  out.push(0x21, 0xFF, 11); for (const c of 'NETSCAPE2.0') out.push(c.charCodeAt(0)); out.push(3, 1, 0, 0, 0);
+  for (const im of images) {
+    const d = im.data, idx = new Uint8Array(w * h);
+    for (let i = 0, j = 0; j < idx.length; i += 4, j++) idx[j] = lookup((d[i] >> 3) << 10 | (d[i + 1] >> 3) << 5 | (d[i + 2] >> 3));
+    out.push(0x21, 0xF9, 4, 0x04); u16(delayCs); out.push(0, 0);
+    out.push(0x2C); u16(0); u16(0); u16(w); u16(h); out.push(0);
+    out.push(8);
+    const data = lzw(idx, 8);
+    for (let i = 0; i < data.length; i += 255) { const n = Math.min(255, data.length - i); out.push(n); for (let k = 0; k < n; k++) out.push(data[i + k]); }
+    out.push(0);
+  }
+  out.push(0x3B);
+  return new Uint8Array(out);
+}
+function lzw(idx, minSize) {
+  const clear = 1 << minSize, eoi = clear + 1, out = [];
+  let size = minSize + 1, next = eoi + 1, cur = 0, bits = 0, dict = new Map();
+  const emit = c => { cur |= c << bits; bits += size; while (bits >= 8) { out.push(cur & 255); cur >>>= 8; bits -= 8; } };
+  emit(clear);
+  let prefix = idx[0];
+  for (let i = 1; i < idx.length; i++) {
+    const k = idx[i], key = prefix << 8 | k, v = dict.get(key);
+    if (v !== undefined) { prefix = v; continue; }
+    emit(prefix);
+    if (next === 4096) { emit(clear); dict = new Map(); size = minSize + 1; next = eoi + 1; }
+    else { if (next >= 1 << size) size++; dict.set(key, next++); }
+    prefix = k;
+  }
+  emit(prefix); emit(eoi);
+  if (bits > 0) out.push(cur & 255);
+  return out;
+}
+let sharing = false;
+async function shareGif() {
+  if (sharing) return; sharing = true; stopPlay(); $('exportModal').style.display = 'none';
+  try {
+    const list = exList(), seq = shareSeq(list), [w, h] = SHARE_SIZES[$('shSize').value] || SHARE_SIZES.small;
+    const step = 20, secs = Math.min(20, Math.max(0.5, seq.total / fps()));
+    const n = Math.max(2, Math.round(secs * step)), sc = shareCanvas(w, h), images = [];
+    toast('Making your GIF…'); await new Promise(r => setTimeout(r, 30));
+    for (let i = 0; i < n; i++) { sc.draw(seq.at(i / step * fps())); images.push(sc.g.getImageData(0, 0, w, h)); if (i % 10 === 9) await new Promise(r => setTimeout(r, 0)); }
+    const gif = makeGif(images, w, h, 5);
+    downloadBlob(cleanName(list.length > 1 ? project.name : list[0].name) + '.gif', new Blob([gif], { type: 'image/gif' }));
+    toast(`GIF saved (${(gif.length / 1048576).toFixed(1)} MB). Drop it into Discord!`);
+  } catch (e) { toast('Sorry, the GIF could not be made'); }
+  sharing = false; showCurrent();
+}
+async function shareVideo() {
+  if (sharing) return;
+  if (typeof MediaRecorder !== 'function') { toast('This browser can\'t record video. Try Chrome or Edge, or make a GIF.'); return; }
+  sharing = true; stopPlay(); $('exportModal').style.display = 'none';
+  try {
+    const list = exList(), seq = shareSeq(list), [w, h] = SHARE_SIZES[$('shSize').value] || SHARE_SIZES.medium;
+    const once = seq.total / fps(), loops = list[list.length - 1].loop ? Math.max(1, Math.min(4, Math.ceil(3 / Math.max(once, 0.1)))) : 1;
+    const secs = Math.min(30, once * loops + (list[list.length - 1].loop ? 0 : 0.5));
+    const sc = shareCanvas(w, h);
+    const mime = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m));
+    const rec = new MediaRecorder(sc.c2.captureStream(30), { mimeType: mime, videoBitsPerSecond: 6e6 }), chunks = [];
+    rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+    const done = new Promise(r => rec.onstop = r);
+    sc.draw(seq.at(0)); rec.start();
+    toast(`Recording video… (${secs.toFixed(1)} s)`);
+    const t0 = performance.now();
+    await new Promise(res => { const tick = () => { const t = (performance.now() - t0) / 1000; if (t >= secs) return res();
+      const p = (t * fps()) % (list[list.length - 1].loop ? seq.total : Infinity); sc.draw(seq.at(p)); requestAnimationFrame(tick); }; tick(); });
+    rec.stop(); await done;
+    const ext = /mp4/.test(mime) ? 'mp4' : 'webm';
+    downloadBlob(cleanName(list.length > 1 ? project.name : list[0].name) + '.' + ext, new Blob(chunks, { type: mime.split(';')[0] }));
+    toast(`Video saved (.${ext}). Drop it into Discord!`);
+  } catch (e) { toast('Sorry, the video could not be made'); }
+  sharing = false; showCurrent();
+}
+function downloadBlob(name, blob) {
+  const el = document.createElement('a'); el.href = URL.createObjectURL(blob); el.download = name;
+  document.body.appendChild(el); el.click(); el.remove(); setTimeout(() => URL.revokeObjectURL(el.href), 4000);
+}
+// --- share by link: the whole project is packed (compressed) into the part of the link after "#",
+// which browsers never send to any server.
+const b64url = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64url = s => { const b = atob(s.replace(/-/g, '+').replace(/_/g, '/')); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+async function streamBytes(stream, limit) {
+  const reader = stream.getReader(), parts = []; let n = 0;
+  for (;;) { const { done, value } = await reader.read(); if (done) break; n += value.length; if (n > limit) { reader.cancel(); throw new Error('too big'); } parts.push(value); }
+  const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length; } return out;
+}
+const QS = 1000;   // rotation precision in links (about 0.1 degree)
+async function makeShareLink() {
+  const per = order.length;
+  const anims = project.anims.slice(0, 20).map(a => {
+    const d = [], m = []; let prev = null;
+    a.frames.forEach((f, i) => {
+      const T = transformsFromWorlds(f.P), row = [];
+      for (const n of order) { const p = new V3(), q = new Q(), sc = new V3(); T[n].decompose(p, q, sc);
+        row.push(Math.round(p.x * 1000), Math.round(p.y * 1000), Math.round(p.z * 1000), Math.round(q.x * QS), Math.round(q.y * QS), Math.round(q.z * QS), Math.round(q.w * QS)); }
+      d.push(...(prev ? row.map((v, j) => v - prev[j]) : row)); prev = row;
+      for (const mk of f.markers) m.push(mk.sound && mk.sound !== 'preview' ? [i, mk.name, mk.sound] : [i, mk.name]);
+    });
+    return { n: a.name, t: a.type, l: a.loop ? 1 : 0, r: a.priority, h: a.frames.map(f => f.hold), m, d };
+  });
+  const json = JSON.stringify({ v: 1, q: QS, n: project.name, f: project.fps, s: project.smooth ? 1 : 0, p: extraDefsList(), k: per, a: anims });
+  const z = await streamBytes(new Blob([new TextEncoder().encode(json)]).stream().pipeThrough(new CompressionStream('deflate-raw')), 5e6);
+  return location.origin + location.pathname + '#share=' + b64url(z);
+}
+async function shareLink() {
+  $('exportModal').style.display = 'none';
+  try {
+    const url = await makeShareLink();
+    $('linkText').value = url;
+    $('linkNote').textContent = url.length <= 1900 ? `Fits in a Discord message (${url.length} characters). Anyone who opens it gets their own copy; nothing is uploaded.`
+      : `This link is ${url.length} characters, too long for a normal Discord message (2000). Share a GIF or video instead, or send the project file (Save).`;
+    $('linkModal').style.display = 'flex';
+  } catch (e) { toast('Sorry, the link could not be made'); }
+}
+$('linkCopy').onclick = async () => { try { await navigator.clipboard.writeText($('linkText').value); toast('Link copied!'); } catch (e) { $('linkText').select(); toast('Press Ctrl+C to copy'); } };
+$('linkClose').onclick = () => $('linkModal').style.display = 'none';
+async function openSharedLink() {
+  const m = /^#share=([A-Za-z0-9_-]{1,300000})$/.exec(location.hash);
+  if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search);
+  try {
+    const raw = unb64url(m[1]);
+    const o = JSON.parse(new TextDecoder().decode(await streamBytes(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw')), 4e6)));
+    if (!o || o.v !== 1 || !Array.isArray(o.a)) throw new Error('bad');
+    setParts(partsFromList(o.p)); syncBodies();
+    if (o.k !== order.length) throw new Error('parts');
+    const per = order.length * 7;   // rotations are normalised, so their stored scale (o.q) does not matter
+    const anims = o.a.slice(0, 20).map(a => {
+      const holds = Array.isArray(a.h) ? a.h.slice(0, 2000) : [];
+      if (!holds.length || !Array.isArray(a.d) || a.d.length !== holds.length * per) throw new Error('size');
+      let prev = null;
+      const frames = holds.map((hd, i) => {
+        const row = a.d.slice(i * per, (i + 1) * per).map((v, j) => { if (!Number.isInteger(v)) throw new Error('num'); return prev ? prev[j] + v : v; });
+        prev = row;
+        const T = {};
+        order.forEach((n, k) => { const r = row.slice(k * 7, k * 7 + 7), q = new Q(r[3], r[4], r[5], r[6]);
+          if (q.length() < 1e-6) q.set(0, 0, 0, 1); q.normalize();
+          T[n] = new M4().compose(new V3(r[0] / 1000, r[1] / 1000, r[2] / 1000), q, new V3(1, 1, 1)); });
+        const W = worldsFromTransforms(T);
+        return { P: Object.fromEntries(order.map(n => [n, W[n].toArray()])), hold: hd, markers: [] };
+      });
+      for (const mk of Array.isArray(a.m) ? a.m.slice(0, 200) : []) if (Array.isArray(mk) && frames[mk[0]]) frames[mk[0]].markers.push(mk[2] ? { name: mk[1], sound: mk[2] } : { name: mk[1] });
+      return { name: a.n, type: a.t, loop: !!a.l, priority: a.r, frames };
+    });
+    const p = deserProject({ v: 3, name: o.n, fps: o.f, smooth: !!o.s, parts: o.p, anims });
+    p.id = uid(); p.name = (p.name + ' (shared)').slice(0, 48);
+    const frames_ = p.anims.reduce((s, a) => s + a.frames.length, 0);
+    if (!confirm(`Someone shared an animation with you:\n\n"${p.name}" (${p.anims.length > 1 ? p.anims.length + ' linked parts, ' : ''}${frames_} frames)\n\nOpen it? It will be added to your projects.`)) { showHome(); return; }
+    await openProject(p, true);
+    toast('Opened the shared animation. It\'s saved in your projects.');
+  } catch (e) { toast('That share link is broken or incomplete'); showHome(); }
+}
+window.addEventListener('hashchange', () => { if (/^#share=/.test(location.hash)) openSharedLink(); });
+$('shGif').onclick = shareGif; $('shVid').onclick = shareVideo; $('shLink').onclick = shareLink;
+
 // ================================================================== import (.rbxmx) and old project formats
 function rbxmxToAnim(text, fileName) {
   const doc = new DOMParser().parseFromString(text, 'application/xml');
@@ -1813,7 +2025,7 @@ function resize() {
 }
 new ResizeObserver(resize).observe(view); resize();
 applyTheme();
-showHome();
+showHome().then(openSharedLink);
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 let last = performance.now();
@@ -1828,4 +2040,4 @@ renderer.setAnimationLoop(now => {
 });
 // test hook (used to check the maths); harmless for normal use
 window.R6Flipbook = { get project() { return project; }, get frames() { return frames; }, get order() { return order; }, get A() { return A; }, get cur() { return cur; },
-  transformsFromWorlds, worldsFromTransforms, buildRbxmx, rbxmxToAnim, mirrorPose, centered, poseAtTime, buildPlay, setPlay: p => play = p, db, projectFromOld, openProject, showHome, aiPrompt };
+  transformsFromWorlds, worldsFromTransforms, buildRbxmx, rbxmxToAnim, mirrorPose, centered, poseAtTime, buildPlay, setPlay: p => play = p, db, projectFromOld, openProject, showHome, aiPrompt, makeShareLink, openSharedLink, makeGif };
