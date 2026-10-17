@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Only this site's own files may run or be loaded; nothing is sent anywhere. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-xAtMlUiJe37621sVZN7FuCORWiODFlAt4m+/AXDdLiQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>R6 Flipbook</title>
+<meta name="description" content="Free frame-by-frame animation maker for Roblox R6 characters. Pose, flip through frames, export .rbxmx. Works offline.">
+<meta name="theme-color" content="#f0507a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta property="og:title" content="R6 Flipbook">
+<meta property="og:description" content="Free frame-by-frame animation maker for Roblox R6 characters. Like FlipaClip, but for R6. Works in your browser, no download.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://animeyeeter123.github.io/r6-flipbook/">
+<meta property="og:image" content="https://animeyeeter123.github.io/r6-flipbook/icons/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<!--
+  R6 Flipbook - a frame-by-frame animation tool for standard Roblox R6 characters (like FlipaClip, for R6).
+  Not made by or affiliated with Roblox Corporation.
+  A project holds one or more linked animations (e.g. Run start -> Run). Every frame is its own pose.
+  Exports Roblox KeyframeSequences (.rbxmx) using the standard R6 Motor6D joints.
+  Roblox axes are used directly: +X right, +Y up, the character faces -Z, feet on Y = -3.
+-->
+<style>
+  :root { --accent: #f0507a; --accent-soft: rgba(240,80,122,.14);
+    --ink: #24242c; --muted: #8a8a96; --line: #e3e3ea; --card: #ffffff; --bg: #f4f4f7; --soft: #f1f1f5; --soft2: #e6e6ee; --frame: #fafafc; }
+  :root[data-theme="dark"] { --ink: #ececf1; --muted: #9a9aa8; --line: #34343f; --card: #23232b; --bg: #17171c; --soft: #2c2c36; --soft2: #383844; --frame: #1d1d24; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
+    font: 14px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; user-select: none; }
+  input, select { color-scheme: light; }
+  :root[data-theme="dark"] input, :root[data-theme="dark"] select { color-scheme: dark; }
+  #view { position: absolute; left: 0; right: 0; top: 0; bottom: 112px; overflow: hidden; }
+  #view canvas.gl { position: absolute; inset: 0; display: block; width: 100%; height: 100%; outline: none; z-index: 1; }
+  #refVideo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; z-index: 0; display: none; background: #111; }
+  #drawLayer { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 5; display: none; cursor: crosshair; }
+  .card { background: var(--card); border-radius: 14px; box-shadow: 0 2px 12px rgba(0,0,0,.12); }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  .btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 6px; border-radius: 10px;
+    min-width: 46px; font-size: 11px; color: var(--ink); }
+  .btn:hover { background: var(--soft); }
+  .btn:disabled { opacity: .35; cursor: default; background: none; }
+  .btn svg { width: 22px; height: 22px; }
+  .btn.on { color: var(--accent); }
+  #top { position: absolute; top: 12px; right: 12px; display: flex; gap: 1px; padding: 4px; z-index: 10; }
+  .sep { width: 1px; background: var(--line); margin: 6px 3px; }
+  #left { position: absolute; left: 12px; top: 12px; display: flex; flex-direction: column; gap: 1px; padding: 4px; z-index: 10; }
+  #left .btn { min-width: 58px; }
+  #left .hsep { height: 1px; background: var(--line); margin: 3px 6px; }
+  #topLeft { position: absolute; left: 90px; top: 12px; display: flex; flex-direction: column; gap: 8px; z-index: 11; width: 270px; }
+  #animCard { padding: 10px 12px; }
+  #animCard .line1 { display: flex; align-items: center; gap: 6px; }
+  #animCard .pname { font-weight: 600; font-size: 14px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #animPick { flex: 1; font: inherit; font-size: 13px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--ink); min-width: 0; }
+  .chipx { font-size: 11px; padding: 2px 7px; border-radius: 10px; background: var(--soft); color: var(--muted); white-space: nowrap; }
+  #guideRow { display: none; margin-top: 8px; padding: 8px; border-radius: 10px; background: var(--accent-soft); font-size: 12px; }
+  #guideRow .small { margin-top: 6px; }
+  #riseWarn { display: none; margin-top: 8px; font-size: 12px; color: #c27a00; }
+  #sel { padding: 10px 12px; display: none; }
+  #sel h3 { margin: 0 0 6px; font-size: 15px; }
+  .row { display: flex; align-items: center; gap: 6px; margin-top: 7px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  .seg { display: flex; background: var(--soft); border-radius: 8px; padding: 2px; }
+  .seg button { padding: 3px 9px; border-radius: 6px; font-size: 12px; color: var(--muted); }
+  .seg button.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+  .small { padding: 5px 10px; border-radius: 8px; background: var(--soft); font-size: 12px; color: var(--ink); }
+  .small:hover { background: var(--soft2); }
+  .small.accent { background: var(--accent); color: #fff; }
+  .small.on { background: var(--accent); color: #fff; }
+  .small:disabled { opacity: .4; cursor: default; }
+  #hint { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); color: var(--muted); z-index: 2;
+    font-size: 12px; white-space: nowrap; pointer-events: none; text-shadow: 0 0 6px var(--bg); }
+  .panel { position: absolute; z-index: 20; padding: 12px 14px; display: none; width: 300px; max-height: calc(100% - 24px); overflow-y: auto; }
+  .panel h2 { margin: 0 0 4px; font-size: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .panel h4 { margin: 14px 0 2px; font-size: 13px; }
+  .panel .x { font-size: 18px; color: var(--muted); padding: 0 4px; }
+  .panel p, .note { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+  input[type=text], input[type=number], .panel select { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line);
+    border-radius: 8px; color: var(--ink); background: var(--card); }
+  .panel input[type=range] { flex: 1; accent-color: var(--accent); }
+  input[type=checkbox] { accent-color: var(--accent); }
+  #scenePanel, #partsPanel { left: 372px; top: 84px; }
+  #posesPanel, #settingsPanel { right: 12px; top: 84px; }
+  .poseGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+  .poseItem { position: relative; border: 2px solid var(--line); border-radius: 9px; cursor: pointer; overflow: hidden; background: var(--frame); }
+  .poseItem:hover { border-color: var(--accent); }
+  .poseItem img { width: 100%; display: block; }
+  .poseItem div { font-size: 11px; padding: 2px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .poseItem button { position: absolute; top: 1px; right: 2px; color: var(--muted); font-size: 14px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; background: var(--accent-soft); color: var(--accent); border-radius: 12px;
+    padding: 2px 4px 2px 9px; font-size: 12px; margin: 4px 4px 0 0; }
+  .chip button { color: var(--accent); font-size: 14px; padding: 0 4px; }
+  .partRow { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+  .swatch { width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent; }
+  .swatch.on { border-color: var(--ink); }
+  #bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 112px; background: var(--card);
+    border-top: 1px solid var(--line); display: flex; align-items: center; gap: 6px; padding: 0 10px; z-index: 10; }
+  .stack { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+  .stack select, .stack input { font: inherit; font-size: 13px; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: 3px 4px; background: var(--card); }
+  #strip { flex: 1; display: flex; align-items: flex-end; gap: 10px; overflow-x: auto; padding: 4px 4px 8px; height: 100%; }
+  #strip::-webkit-scrollbar { height: 8px; } #strip::-webkit-scrollbar-thumb { background: var(--soft2); border-radius: 4px; }
+  .secWrap { flex: none; display: flex; flex-direction: column; gap: 3px; opacity: .5; }
+  .secWrap.cur { opacity: 1; }
+  .secHead { font-size: 11px; color: var(--muted); display: flex; gap: 6px; align-items: center; padding: 0 4px; white-space: nowrap; }
+  .secHead b { color: var(--ink); }
+  .secWrap.cur .secHead b { color: var(--accent); }
+  .secFrames { display: flex; gap: 6px; align-items: center; padding: 3px; border-radius: 12px; }
+  .secWrap.cur .secFrames { background: var(--accent-soft); }
+  .link { flex: none; align-self: center; color: var(--muted); font-size: 18px; margin-top: 18px; }
+  .frame { position: relative; flex: none; height: 76px; border: 2px solid var(--line); border-radius: 10px;
+    background: var(--frame); cursor: pointer; overflow: hidden; }
+  .frame img { height: 100%; width: 100%; display: block; object-fit: cover; }
+  .frame .num { position: absolute; top: 3px; right: 5px; font-size: 11px; color: var(--muted); }
+  .frame .hold { position: absolute; bottom: 3px; right: 5px; font-size: 11px; background: #24242c; color: #fff; border-radius: 6px; padding: 0 5px; }
+  .frame .mark { position: absolute; top: 3px; left: 4px; font-size: 11px; background: #ffd23f; color: #24242c; border-radius: 6px; padding: 0 5px;
+    max-width: 78px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .frame.sel { border-color: #5aa0ff; box-shadow: 0 0 0 2px rgba(90,160,255,.35); }
+  .frame.cur { border-color: var(--accent); }
+  .frame.cur .num { background: var(--accent); color: #fff; border-radius: 6px; padding: 0 5px; }
+  .addBtn { flex: none; width: 48px; height: 76px; border: 2px dashed var(--soft2); border-radius: 10px; font-size: 28px; color: var(--muted); }
+  .addBtn:hover { border-color: var(--accent); color: var(--accent); }
+  #play { display: flex; align-items: center; gap: 1px; }
+  #play .btn { min-width: 42px; }
+  #playBtn svg { width: 30px; height: 30px; }
+  #rateCustom { width: 58px; display: none; }
+  #markerPop { left: 150px; bottom: 120px; width: 290px; }
+  #drawBanner { position: absolute; left: 50%; top: 80px; transform: translateX(-50%); z-index: 30; display: none; padding: 10px 14px;
+    align-items: center; gap: 10px; font-size: 14px; }
+  #drawBanner b { color: var(--accent); }
+  #ctx { position: fixed; z-index: 70; display: none; min-width: 210px; padding: 5px; }
+  #ctx .item { display: flex; justify-content: space-between; gap: 16px; width: 100%; text-align: left; padding: 7px 10px; border-radius: 8px; font-size: 13px; }
+  #ctx .item:hover:not(:disabled) { background: var(--soft); }
+  #ctx .item:disabled { opacity: .4; cursor: default; }
+  #ctx .item span { color: var(--muted); font-size: 12px; }
+  #ctx .head { padding: 5px 10px 3px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  #ctx .hr { height: 1px; background: var(--line); margin: 4px 6px; }
+  .modal { position: fixed; inset: 0; background: rgba(10,10,20,.45); display: none; align-items: center; justify-content: center; z-index: 50; }
+  .modal > .card { width: min(440px, calc(100% - 32px)); padding: 18px; max-height: calc(100% - 32px); overflow-y: auto; }
+  .modal h2 { margin: 0 0 10px; font-size: 18px; }
+  .modal label.f { display: block; margin-top: 10px; font-size: 13px; color: var(--muted); }
+  .modal input[type=text], .modal select { width: 100%; margin-top: 4px; padding: 7px 9px; }
+  .modal .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .primary { background: var(--accent); color: #fff; padding: 8px 14px; border-radius: 9px; }
+  .ghost { background: var(--soft); padding: 8px 14px; border-radius: 9px; }
+  .ghost:disabled { opacity: .4; cursor: default; }
+  .modal p { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+  .choice { display: block; width: 100%; text-align: left; border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-top: 10px; }
+  .choice:hover { border-color: var(--accent); }
+  .choice b { display: block; font-size: 14px; }
+  .choice span { font-size: 12px; color: var(--muted); }
+  .choice.rec b::after { content: "  Recommended"; font-size: 11px; color: var(--accent); font-weight: 600; }
+  .warnBox { background: rgba(255,200,40,.16); border: 1px solid rgba(220,160,0,.45); border-radius: 10px; padding: 8px 10px; font-size: 12px; margin-top: 10px; }
+  .typeGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
+  .typeBtn { border: 2px solid var(--line); border-radius: 10px; padding: 10px 4px; font-size: 13px; }
+  .typeBtn small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .typeBtn.on { border-color: var(--accent); background: var(--accent-soft); }
+  .ask { margin-top: 10px; font-size: 13px; }
+  .ask .seg { display: inline-flex; margin-left: 6px; vertical-align: middle; }
+  #home { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: none; overflow-y: auto; }
+  #home .wrap { max-width: 1000px; margin: 0 auto; padding: 28px 20px 60px; }
+  #home header { display: flex; align-items: center; gap: 10px; }
+  #home h1 { margin: 0; font-size: 24px; flex: 1; }
+  #home h1 span { color: var(--accent); }
+  .homeActions { display: flex; gap: 8px; margin: 18px 0 8px; flex-wrap: wrap; }
+  .bigBtn { background: var(--accent); color: #fff; padding: 11px 18px; border-radius: 12px; font-size: 15px; }
+  .projGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-top: 14px; }
+  .proj { cursor: pointer; overflow: hidden; border: 2px solid transparent; }
+  .proj:hover { border-color: var(--accent); }
+  .proj img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; background: var(--frame); }
+  .proj .meta { padding: 8px 10px; }
+  .proj .meta b { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .proj .meta span { font-size: 12px; color: var(--muted); }
+  #tourShade { position: fixed; z-index: 80; display: none; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); pointer-events: none; transition: all .2s; }
+  #tourCard { position: fixed; z-index: 81; display: none; width: 300px; padding: 14px 16px; }
+  #tourCard p { margin: 0; font-size: 14px; line-height: 1.45; }
+  #tourCard .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+  #tourCard .count { font-size: 12px; color: var(--muted); }
+  #toast { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); background: #24242c; color: #fff; z-index: 90;
+    padding: 8px 14px; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; max-width: 80%; }
+</style>
+</head>
+<body>
+<div id="view">
+  <video id="refVideo" muted playsinline preload="auto"></video>
+  <canvas id="drawLayer"></canvas>
+</div>
+
+<div id="topLeft">
+  <div id="animCard" class="card">
+    <div class="line1">
+      <button class="small" id="homeBtn" title="Back to all your animations">◀ Projects</button>
+      <span class="pname" id="pname" title="Project name"></span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <select id="animPick" title="Which animation of this project you're editing"></select>
+      <span class="chipx" id="animLoop"></span>
+    </div>
+    <div class="row">
+      <button class="small" id="testBtn" title="Shows the animation the way Roblox plays it: the body stays on the character's spot (T)">Test for Roblox</button>
+      <button class="small" id="animSettingsBtn" title="Name, type, loop and priority of this animation">Animation settings</button>
+    </div>
+    <div id="guideRow"><span id="guideText"></span><br><button class="small accent" id="guideDone">Done</button></div>
+    <div id="riseWarn"></div>
+  </div>
+  <div id="sel" class="card">
+    <h3 id="selName">Right Arm</h3>
+    <div class="row">Turn around <div class="seg" id="pivotSeg"><button data-v="joint" class="on">Joint</button><button data-v="middle">Middle</button></div></div>
+    <div class="row">Arrows <div class="seg" id="axesSeg"><button data-v="world" class="on">World</button><button data-v="local">Part</button></div></div>
+    <div class="row" id="carryNote"></div>
+    <div class="row"><button class="small" id="copyPart">Copy part</button><button class="small" id="pastePart" disabled>Paste part</button><button class="small" id="resetPart">Reset</button></div>
+    <div class="row"><button class="small" id="liveMirrorBtn" title="Posing one side also poses the other side, mirrored">Live mirror: off</button></div>
+  </div>
+</div>
+
+<div id="top" class="card">
+  <button class="btn" id="undo" title="Undo (Ctrl+Z)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/></svg>Undo</button>
+  <button class="btn" id="redo" title="Redo (Ctrl+Y)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 000 12h3"/></svg>Redo</button>
+  <div class="sep"></div>
+  <button class="btn" id="copy" title="Copy the selected frame(s) (Ctrl+C)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"/></svg>Copy</button>
+  <button class="btn" id="paste" title="Paste (Ctrl+V): one frame replaces this pose, several frames are inserted after this one"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="5" width="12" height="16" rx="2"/><path d="M9 5V3h6v2"/></svg>Paste</button>
+  <button class="btn" id="mirror" title="Mirror options"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v18" stroke-dasharray="2 2"/><path d="M9 7L4 12l5 5V7zM15 7l5 5-5 5V7z"/></svg>Mirror ▾</button>
+  <button class="btn" id="del" title="Delete the selected frame(s) (Delete)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>Delete</button>
+  <button class="btn on" id="onion" title="Show faded ghosts of the frames before (red) and after (green)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="12" r="6" opacity=".45"/><circle cx="15" cy="12" r="6"/></svg>Ghosts</button>
+  <div class="sep"></div>
+  <button class="btn" id="draw" title="Draw a stick figure and the character copies it"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="2.5"/><path d="M12 8v7M12 10l-5 3M12 10l5-2M12 15l-4 6M12 15l4 6"/></svg>Draw</button>
+  <button class="btn" id="poses" title="Saved poses you can reuse"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/></svg>Poses</button>
+  <button class="btn" id="tools" title="In-betweens, reverse, feet on ground, auto loop…"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14.7 6.3a4 4 0 00-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 005.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>Tools ▾</button>
+  <div class="sep"></div>
+  <button class="btn" id="save" title="Save this project to a file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Save</button>
+  <button class="btn" id="open" title="Open a project file, or add a Roblox animation (.rbxmx) to this project"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>Open</button>
+  <button class="btn" id="export" title="Export Roblox animation files (.rbxmx)" style="color:var(--accent)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 15V4M7 9l5-5 5 5M5 20h14"/></svg>Export</button>
+  <div class="sep"></div>
+  <button class="btn" id="settingsBtn" title="Dark mode, colours, tutorial"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.8-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.8 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.1a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.8.3H9a1.6 1.6 0 001-1.5V3a2 2 0 114 0v.1a1.6 1.6 0 001 1.5 1.6 1.6 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.8V9a1.6 1.6 0 001.5 1H21a2 2 0 110 4h-.1a1.6 1.6 0 00-1.5 1z"/></svg>Settings</button>
+</div>
+
+<div id="left" class="card">
+  <button class="btn" data-view="angle" title="Three-quarter view">◩<br>Angle</button>
+  <button class="btn" data-view="front" title="Front view">◼<br>Front</button>
+  <button class="btn" data-view="side" title="Side view (best for drawing runs and kicks)">◧<br>Side</button>
+  <button class="btn" data-view="back" title="Back view">◻<br>Back</button>
+  <button class="btn" data-view="game" title="How players see it: the normal Roblox camera behind the character">🎮<br>Game</button>
+  <button class="btn" data-view="shiftlock" title="The Roblox shift-lock camera (over the shoulder)">⌖<br>Shift-lock</button>
+  <div class="hsep"></div>
+  <button class="btn" id="sceneBtn" title="Character look, practice dummy, moving floor, reference video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 20h18M6 20V9l6-5 6 5v11"/><rect x="10" y="13" width="4" height="7"/></svg>Scene</button>
+  <button class="btn" id="partsBtn" title="Extra arms and props (knife, fireball, block)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="8" y="3" width="8" height="8" rx="1.5"/><path d="M8 7H4v9M16 7h4v9M12 14v7M9 18h6"/></svg>Parts</button>
+</div>
+
+<div id="scenePanel" class="panel card">
+  <h2>Scene <button class="x" data-close>×</button></h2>
+  <h4>Character look</h4>
+  <div class="row"><input type="text" id="avName" placeholder="Roblox username" maxlength="20" style="flex:1" disabled><button class="small accent" id="avLoad" disabled>Load</button><button class="small" id="avReset" title="Back to the default colours">Default</button></div>
+  <p id="avStatus">Loading a player's avatar is coming soon to the online version.</p>
+  <h4>Practice dummy</h4>
+  <div class="row"><label><input type="checkbox" id="dummyOn"> Show a dummy in front</label>
+    <select id="dummyDist" title="Distance in studs"><option value="3">3 studs</option><option value="4" selected>4 studs</option><option value="5">5 studs</option><option value="6">6 studs</option><option value="8">8 studs</option></select></div>
+  <h4>Moving floor</h4>
+  <div class="row"><label><input type="checkbox" id="floorOn"> Slide the floor while playing</label>
+    <select id="floorSpeed" title="Speed in studs per second"><option value="8">8 /s</option><option value="16" selected>16 /s (walk)</option><option value="24">24 /s</option><option value="30">30 /s (run)</option></select></div>
+  <p>Checks whether feet look planted or slide. Best with Test for Roblox on.</p>
+  <h4>Reference video</h4>
+  <div class="row"><button class="small" id="refChoose">Choose video…</button><label><input type="checkbox" id="refShow" checked> Show</label></div>
+  <div class="row">See-through <input type="range" id="refOpacity" min="0.1" max="1" step="0.05" value="0.7"></div>
+  <div class="row">Frame 1 is at <input type="range" id="refStart" min="0" max="1" step="0.001" value="0"> <span id="refTime">0.00s</span></div>
+  <div class="row"><button class="small" id="refBack" title="Move the video back one video frame">◀ 1</button><button class="small" id="refFwd" title="Move the video forward one video frame">1 ▶</button><button class="small" id="refClear">Remove</button></div>
+  <p>The video plays behind the character and follows your frames. Line up the camera with the video, then pose over it.</p>
+  <input type="file" id="refFile" accept="video/*" style="display:none">
+</div>
+
+<div id="partsPanel" class="panel card">
+  <h2>Parts <button class="x" data-close>×</button></h2>
+  <h4>Extra arms</h4>
+  <div class="row"><button class="small accent" id="addArm">Add extra arm</button></div>
+  <p>Up to 4. They are named Extra Arm 1–4 and sit below the normal arms. Pose them like any arm.</p>
+  <h4>Props</h4>
+  <div class="row"><select id="propType"><option value="knife">Knife</option><option value="ball">Fireball</option><option value="block">Block</option></select>
+    in <select id="propHolder"></select></div>
+  <div class="row"><input type="text" id="propName" value="Knife" maxlength="24" style="flex:1"><button class="small accent" id="addProp">Add prop</button></div>
+  <p>A prop is held at the hand and moves with it. You can also turn or move it on its own.</p>
+  <h4>Added parts</h4>
+  <div id="partList"><p>None yet.</p></div>
+  <p>Extra parts belong to the whole project, so every animation in it has them. In your game, add parts with the same names to the character.</p>
+</div>
+
+<div id="posesPanel" class="panel card">
+  <h2>Saved poses <button class="x" data-close>×</button></h2>
+  <div class="row"><input type="text" id="poseName" placeholder="Pose name" maxlength="24" style="flex:1"><button class="small accent" id="poseSave">Save this pose</button></div>
+  <p>Click a saved pose to put it on the current frame.</p>
+  <div class="poseGrid" id="poseGrid"></div>
+</div>
+
+<div id="settingsPanel" class="panel card">
+  <h2>Settings <button class="x" data-close>×</button></h2>
+  <h4>Look</h4>
+  <div class="row">Theme <div class="seg" id="themeSeg"><button data-v="light">Light</button><button data-v="dark">Dark</button><button data-v="auto">Match PC</button></div></div>
+  <div class="row">Colour <span id="swatches" style="display:flex;gap:6px"></span><input type="color" id="accentPick" title="Pick any colour" style="width:30px;height:26px;border:0;background:none;padding:0"></div>
+  <h4>New animations</h4>
+  <div class="row">Start at <select id="defFps"><option value="6">6 fps</option><option value="12">12 fps</option><option value="15">15 fps</option><option value="24">24 fps</option><option value="30">30 fps</option><option value="60">60 fps</option></select></div>
+  <h4>Help</h4>
+  <div class="row"><label><input type="checkbox" id="hintsOn" checked> Show the hint line at the bottom</label></div>
+  <div class="row"><button class="small accent" id="tourAgain">Show the tutorial again</button></div>
+  <h4>Exports</h4>
+  <p id="exportWhere"></p>
+  <div class="row"><button class="small" id="pickFolder">Choose export folder…</button></div>
+  <h4>About</h4>
+  <p>R6 Flipbook is free and open source. Your projects stay in this browser on your own computer; nothing is uploaded. Not made by or affiliated with Roblox.</p>
+</div>
+
+<div id="markerPop" class="panel card">
+  <h2><span id="markerTitle">Markers</span> <button class="x" data-close>×</button></h2>
+  <h4>Marker</h4>
+  <div class="row"><input type="text" id="markerName" placeholder="e.g. Hit, Fire, Step" maxlength="24" style="flex:1"><button class="small accent" id="markerAdd">Add</button></div>
+  <p>The game hears this name the moment the animation reaches the frame, so a punch deals damage exactly on time.</p>
+  <h4>Sound</h4>
+  <div class="row"><input type="text" id="soundId" placeholder="Roblox sound ID" maxlength="20" style="flex:1"><button class="small" id="soundFileBtn" title="Optional: a sound file from your PC to hear while previewing">Preview file…</button></div>
+  <div class="row"><span id="soundFileName" class="note">No preview file</span><button class="small accent" id="soundAdd">Add sound</button></div>
+  <input type="file" id="soundFile" accept="audio/*" style="display:none">
+  <h4>On this frame</h4>
+  <div id="markerList"></div>
+</div>
+
+<div id="drawBanner" class="card"><span id="drawText"></span><button class="small" id="drawSkip">Skip</button><button class="small accent" id="drawDone">Done</button></div>
+
+<div id="hint">Click a body part to pose it · Right-click for more · Drag empty space to spin · Right-drag to pan · Scroll to zoom · Shift snaps</div>
+
+<div id="bottom">
+  <div class="stack">Speed
+    <select id="fps" title="Frames per second">
+      <option value="6">6 fps</option><option value="12">12 fps</option><option value="15">15 fps</option>
+      <option value="24">24 fps</option><option value="30">30 fps</option><option value="60">60 fps</option>
+    </select>
+  </div>
+  <div class="stack">Hold
+    <select id="hold" title="How many frames this drawing stays on screen">
+      <option value="1">×1</option><option value="2">×2</option><option value="3">×3</option><option value="4">×4</option><option value="6">×6</option><option value="8">×8</option>
+    </select>
+  </div>
+  <button class="btn" id="markerBtn" title="Markers and sounds on this frame"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>Marker</button>
+  <div id="strip"></div>
+  <div id="play">
+    <div class="stack">Play speed
+      <div style="display:flex;gap:3px"><select id="rate" title="Playback speed (only for watching; doesn't change the animation)">
+        <option value="0.25">¼×</option><option value="0.5">½×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option><option value="custom">Custom…</option>
+      </select><input type="number" id="rateCustom" min="0.05" max="10" step="0.05" value="1.5" title="Custom playback speed"></div>
+    </div>
+    <button class="btn on" id="smooth" title="Smooth: blend between frames like Roblox does. Off: snap frame to frame like a flipbook."><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 17c4 0 4-10 9-10s5 10 9 10"/></svg>Smooth</button>
+    <button class="btn" id="prev" title="Previous frame (←)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg>Back</button>
+    <button class="btn" id="playBtn" title="Play / pause (Space)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13-8z"/></svg></button>
+    <button class="btn" id="next" title="Next frame (→)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg>Next</button>
+  </div>
+</div>
+
+<!-- export -->
+<div class="modal" id="exportModal"><div class="card">
+  <h2>Export to Roblox</h2>
+  <div id="exWhich"></div>
+  <div id="exWarn"></div>
+  <button class="choice rec" id="exCenter"><b>Center the torso</b><span>The body stays on the character's real spot in the game, the way Roblox plays animations. Use it for runs, walks, idles, jumps and most attacks. Your poses don't change; only drifting across the floor is removed.</span></button>
+  <button class="choice" id="exKeep"><b>Keep motion</b><span>Exactly as you animated it, including moving across the floor. Use it for moves that should travel inside the animation, like a cutscene or an emote that steps forward and back.</span></button>
+  <p id="exWhere"></p>
+  <div class="actions"><button class="ghost" id="exCancel">Cancel</button></div>
+</div></div>
+
+<!-- new animation -->
+<div class="modal" id="newModal"><div class="card">
+  <h2>What do you want to make?</h2>
+  <div class="typeGrid" id="typeGrid"></div>
+  <div id="followUps"></div>
+  <label class="f">Name<input type="text" id="newName" maxlength="40"></label>
+  <label class="f">Frames per second<select id="newFps"><option value="6">6 fps</option><option value="12">12 fps</option><option value="15">15 fps</option><option value="24">24 fps</option><option value="30">30 fps</option><option value="60">60 fps</option></select></label>
+  <p>Fewer frames per second means fewer drawings; Roblox still plays it smoothly with "Smooth" on.</p>
+  <div class="actions"><button class="ghost" id="newCancel">Cancel</button><button class="primary" id="newGo">Start animating</button></div>
+</div></div>
+
+<!-- animation settings -->
+<div class="modal" id="animModal"><div class="card">
+  <h2>Animation settings</h2>
+  <label class="f">Name<input type="text" id="amName" maxlength="40"></label>
+  <label class="f">Type<select id="amType"></select></label>
+  <label class="f" style="display:flex;align-items:center;gap:8px;color:var(--ink)"><input type="checkbox" id="amLoop"> Loops (repeats, like a run or idle)</label>
+  <label class="f">Priority (which animation wins when two play at once)<select id="amPriority">
+    <option value="0">Idle</option><option value="1">Movement (runs, walks, jumps)</option><option value="2">Action (attacks, emotes)</option>
+    <option value="3">Action 2</option><option value="4">Action 3</option><option value="5">Action 4</option><option value="1000">Core</option></select></label>
+  <p>Animations in a project play one after another: a one-shot animation flows into the next one, and a looping one repeats.</p>
+  <div class="actions" style="justify-content:space-between"><span><button class="ghost" id="amAdd">Add another animation</button> <button class="ghost" id="amDelete">Delete</button></span><span><button class="primary" id="amOk">Done</button></span></div>
+</div></div>
+
+<!-- use it with AI -->
+<div class="modal" id="aiModal"><div class="card" style="width:min(560px, calc(100% - 32px))">
+  <h2 id="aiTitle">Exported! Want an AI to add it to your game?</h2>
+  <p style="font-size:13px;color:var(--ink)">R6 Flipbook files work with AI helpers (ChatGPT, Claude and others). Copy this message, paste it into your AI chat, and attach the exported .rbxmx file(s). It already explains what the animation is and how it should be used.</p>
+  <textarea id="aiText" readonly spellcheck="false" style="width:100%;height:240px;margin-top:10px;font:12px/1.4 ui-monospace,Consolas,monospace;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--soft);color:var(--ink);resize:vertical"></textarea>
+  <p>Always read what an AI suggests before using it, and keep a backup of your game.</p>
+  <div class="actions"><button class="ghost" id="aiClose">Close</button><button class="primary" id="aiCopy">Copy message</button></div>
+</div></div>
+
+<!-- in-betweens -->
+<div class="modal" id="ibModal"><div class="card">
+  <h2>Add in-betweens</h2>
+  <p id="ibWhat" style="font-size:13px;color:var(--ink)"></p>
+  <label class="f">How many new frames<select id="ibCount"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>8</option></select></label>
+  <label class="f">Timing<select id="ibEase"><option value="even">Even</option><option value="out">Fast, then slow (settling into a pose)</option><option value="in">Slow, then fast (winding up, speeding up)</option><option value="both">Slow at both ends</option></select></label>
+  <div class="warnBox">⚠ In-betweens are a guess. Each part simply travels straight between the two poses, so arcs, overlaps and snappy timing get lost. Check every new frame and fix it by hand. You can always undo.</div>
+  <div class="actions"><button class="ghost" id="ibCancel">Cancel</button><button class="primary" id="ibGo">Add in-betweens</button></div>
+</div></div>
+
+<!-- home: all projects -->
+<div id="home"><div class="wrap">
+  <header><h1>R6 <span>Flipbook</span></h1><button class="small" id="homeSettings">Settings</button></header>
+  <div class="homeActions">
+    <button class="bigBtn" id="newBtn">＋ New animation</button>
+    <button class="ghost" id="homeOpen">Open file…</button>
+    <button class="ghost" id="homeOld" style="display:none">Bring back my work from the old version</button>
+  </div>
+  <div class="projGrid" id="projGrid"></div>
+  <p class="note" id="homeEmpty" style="display:none;margin-top:20px">No animations yet. Press <b>New animation</b> to start.</p>
+</div></div>
+
+<div id="ctx" class="card"></div>
+<div id="tourShade"></div>
+<div id="tourCard" class="card"><p id="tourText"></p><div class="actions"><span class="count" id="tourCount"></span><span><button class="ghost" id="tourSkip">Skip</button> <button class="ghost" id="tourBack">Back</button> <button class="primary" id="tourNext">Next</button></span></div></div>
+<input type="file" id="fileIn" accept=".json,.rbxmx" style="display:none">
+<div id="toast"></div>
+
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/controls/OrbitControls.js":"./vendor/OrbitControls.js"}}</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

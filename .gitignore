@@ -1,0 +1,16 @@
+# never upload these
+.env
+*.env
+*.key
+*.pem
+*.log
+*.rbxmx
+*.rbxl
+*.rbxlx
+*.r6flip.json
+Exports/
+node_modules/
+Thumbs.db
+desktop.ini
+*.exe
+*.pdb
