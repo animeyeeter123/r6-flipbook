@@ -18,10 +18,10 @@ const FPS_LIST = [6, 12, 15, 24, 30, 60];
 const escH = s => String(s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c]));
 
 // ================================================================== settings and theme
-const settings = Object.assign({ theme: 'light', accent: '#f0507a', defFps: 12, hints: true, tourDone: false, oldImported: false },
+const settings = Object.assign({ theme: 'dark', accent: '#f0507a', defFps: 12, hints: true, tourDone: false, oldImported: false },
   (() => { try { return JSON.parse(store.get('r6flipbook.settings') || '{}'); } catch (e) { return {}; } })());
 if (!/^#[0-9a-f]{6}$/i.test(settings.accent)) settings.accent = '#f0507a';
-if (!['light', 'dark', 'auto'].includes(settings.theme)) settings.theme = 'light';
+if (!['light', 'dark', 'auto'].includes(settings.theme) || !settings.themeChosen) settings.theme = 'dark';   // dark unless you picked another look
 if (![6, 12, 15, 24, 30, 60].includes(+settings.defFps)) settings.defFps = 12;
 const saveSettings = () => store.set('r6flipbook.settings', JSON.stringify(settings));
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
@@ -2191,7 +2191,7 @@ function refreshSettings() {
   exFolderText().then(t => $('exportWhere').textContent = t);
   $('pickFolder').style.display = canPickFolder ? 'inline-block' : 'none';
 }
-seg('themeSeg', v => { settings.theme = v; saveSettings(); applyTheme(); });
+seg('themeSeg', v => { settings.theme = v; settings.themeChosen = true; saveSettings(); applyTheme(); });
 $('accentPick').oninput = e => { settings.accent = e.target.value; saveSettings(); applyTheme(); };
 $('defFps').onchange = e => { settings.defFps = +e.target.value; saveSettings(); };
 $('hintsOn').onchange = e => { settings.hints = e.target.checked; saveSettings(); applyTheme(); };

@@ -37,6 +37,9 @@ Everything stays on your own computer. Projects are saved in your browser; nothi
 
 ## Updates
 
+**v1.5**
+- Dark look by default (Light is still in Settings)
+
 **v1.4**
 - Renamed from R6 Flipbook to RigFlip (your saved work carries over)
 
