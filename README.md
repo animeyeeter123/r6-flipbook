@@ -1,6 +1,6 @@
 # R6 Flipbook
 
-A free, frame-by-frame animation maker for Roblox **R6** characters, in the style of FlipaClip.
+A free, frame-by-frame animation maker for Roblox **R6** and **R15** characters, in the style of FlipaClip.
 
 **Use it:** https://animeyeeter123.github.io/r6-flipbook/
 
@@ -35,6 +35,9 @@ Everything stays on your own computer. Projects are saved in your browser; nothi
 - R6 Flipbook is not made by, endorsed by or affiliated with Roblox Corporation. "Roblox" is a trademark of Roblox Corporation.
 
 ## Updates
+
+**v1.2**
+- Added: R15 bodies (pick R6 or R15 when you start a new animation)
 
 **v1.1**
 - Added: share as GIF or video (under Export)

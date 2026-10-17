@@ -27,13 +27,12 @@ const saveSettings = () => store.set('r6flipbook.settings', JSON.stringify(setti
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 const isDark = () => settings.theme === 'dark' || (settings.theme === 'auto' && darkQuery.matches);
 
-// ================================================================== rig: standard R6 plus optional extra parts
+// ================================================================== rigs: standard R6 or R15, plus optional extra parts
 const cf = (x, y, z, r) => new M4().set(r[0], r[1], r[2], x, r[3], r[4], r[5], y, r[6], r[7], r[8], z, 0, 0, 0, 1);
 const ROOT = [-1, 0, 0, 0, 0, 1, 0, 1, 0], RIGHT = [0, 0, 1, 0, 1, 0, -1, 0, 0], LEFT = [0, 0, -1, 0, 1, 0, 1, 0, 0];
 const IDENT = [1, 0, 0, 0, 1, 0, 0, 0, 1];
-const BASE = ['Torso', 'Head', 'Right Arm', 'Left Arm', 'Right Leg', 'Left Leg'];
-const MIRROR_BASE = { 'Right Arm': 'Left Arm', 'Left Arm': 'Right Arm', 'Right Leg': 'Left Leg', 'Left Leg': 'Right Leg' };
-function baseDefs() {
+const R6_BASE = ['Torso', 'Head', 'Right Arm', 'Left Arm', 'Right Leg', 'Left Leg'];
+function r6Defs() {
   const d = (name, size, parent, c0, c1, joint, reach, layout) => ({ name, kind: 'base', size, parent, c0, c1, joint, reach, layout });
   return [
     d('Torso', [2, 2, 1], null, cf(0, 0, 0, ROOT), cf(0, 0, 0, ROOT), [0, 0, 0], [0, 1, 0], 'torso'),
@@ -44,6 +43,50 @@ function baseDefs() {
     d('Left Leg', [1, 2, 1], 'Torso', cf(-1, -1, 0, LEFT), cf(-0.5, 1, 0, LEFT), [0, 1, 0], [0, -1, 0], 'lleg'),
   ];
 }
+// R15: joint positions are the rig attachments of Roblox's default R15 body (read from Studio, 2026-10-16).
+// Each joint's C0/C1 is the attachment on the parent/child part; all attachments are unrotated.
+function r15Defs() {
+  const T = (x, y, z) => cf(x, y, z, IDENT);
+  const d = (name, size, parent, a0, a1, reach, layout) => ({ name, kind: 'base', size, parent, c0: T(...a0), c1: T(...a1), joint: a1.slice(), reach, layout });
+  const out = [
+    d('LowerTorso', [1.99, 0.4, 1], null, [0, -1, 0], [0, -0.2, 0], [0, 1, 0], 'c:torso'),
+    d('UpperTorso', [1.94, 1.7, 1], 'LowerTorso', [0, 0.2, 0], [0, -0.849, 0], [0, 1, 0], 'c:torso'),
+    d('Head', [1.16, 1.18, 1.16], 'UpperTorso', [0, 0.849, 0], [0, -0.5758, 0], [0, 1, 0], 'head'),
+  ];
+  for (const [side, sx, key] of [['Right', 1, 'right'], ['Left', -1, 'left']]) {
+    out.push(
+      d(`${side}UpperArm`, [1, 1.24, 1], 'UpperTorso', [sx * 0.9716, 0.5975, 0], [-sx * 0.5005, 0.4189, 0], [0, -1, 0], `c:${key}Arm`),
+      d(`${side}LowerArm`, [1, 1.12, 1], `${side}UpperArm`, [0, -0.355, 0], [0, 0.2747, 0], [0, -1, 0], `c:${key}Arm`),
+      d(`${side}Hand`, [0.98, 0.32, 1.03], `${side}LowerArm`, [0, -0.5322, 0], [0, 0.1316, 0], [0, -1, 0], `c:${key}Arm`),
+      d(`${side}UpperLeg`, [0.99, 1.36, 0.97], 'LowerTorso', [sx * 0.5, -0.2, 0], [0, 0.4714, 0], [0, -1, 0], `c:${key}Leg`),
+      d(`${side}LowerLeg`, [0.99, 1.3, 0.97], `${side}UpperLeg`, [0, -0.4492, 0], [0, 0.4134, 0], [0, -1, 0], `c:${key}Leg`),
+      d(`${side}Foot`, [1.01, 0.31, 1], `${side}LowerLeg`, [0, -0.5965, 0], [0, 0.106, 0], [0, -1, 0], `c:${key}Leg`));
+  }
+  return out;
+}
+const RIGS = {
+  R6: { name: 'R6', base: r6Defs, root: 'Torso', hrp: new M4(), extraArms: true,
+        holders: ['Right Arm', 'Left Arm'], gripY: -1,
+        feet: [['Right Leg', 0.5, 1, 0.5], ['Left Leg', 0.5, 1, 0.5]],
+        mirror: { 'Right Arm': 'Left Arm', 'Left Arm': 'Right Arm', 'Right Leg': 'Left Leg', 'Left Leg': 'Right Leg' },
+        draw: [['Torso', 'from the <b>neck</b> down to the <b>hips</b>'], ['Head', 'from the <b>neck</b> up to the <b>top of the head</b>'],
+               ['Right Arm', 'from the <b>shoulder</b> to the <b>hand</b>'], ['Left Arm', 'from the <b>shoulder</b> to the <b>hand</b>'], 'extras',
+               ['Right Leg', 'from the <b>hip</b> to the <b>foot</b>'], ['Left Leg', 'from the <b>hip</b> to the <b>foot</b>']],
+        describe: 'standard Roblox R6 (Torso, Head, Right Arm, Left Arm, Right Leg, Left Leg, joined by the usual R6 Motor6Ds under HumanoidRootPart). The game must use R6 avatars.' },
+  R15: { name: 'R15', base: r15Defs, root: 'LowerTorso', hrp: new M4().makeTranslation(0, 0.1924, 0), extraArms: false,
+         holders: ['RightHand', 'LeftHand'], gripY: -0.16,
+         feet: [['RightFoot', 0.5, 0.155, 0.5], ['LeftFoot', 0.5, 0.155, 0.5]],
+         mirror: Object.fromEntries(['UpperArm', 'LowerArm', 'Hand', 'UpperLeg', 'LowerLeg', 'Foot'].flatMap(p => [['Right' + p, 'Left' + p], ['Left' + p, 'Right' + p]])),
+         draw: [['LowerTorso', 'from the <b>neck</b> down to the <b>hips</b>'], ['Head', 'from the <b>neck</b> up to the <b>top of the head</b>'],
+                ['RightUpperArm', 'from the <b>shoulder</b> to the <b>elbow</b>'], ['RightLowerArm', 'from the <b>elbow</b> to the <b>hand</b>'],
+                ['LeftUpperArm', 'from the <b>shoulder</b> to the <b>elbow</b>'], ['LeftLowerArm', 'from the <b>elbow</b> to the <b>hand</b>'],
+                ['RightUpperLeg', 'from the <b>hip</b> to the <b>knee</b>'], ['RightLowerLeg', 'from the <b>knee</b> to the <b>foot</b>'],
+                ['LeftUpperLeg', 'from the <b>hip</b> to the <b>knee</b>'], ['LeftLowerLeg', 'from the <b>knee</b> to the <b>foot</b>']],
+         describe: 'standard Roblox R15 (LowerTorso, UpperTorso, Head, Upper/Lower arms and legs, Hands and Feet, joined by the standard R15 joints Root, Waist, Neck, Shoulders, Elbows, Wrists, Hips, Knees and Ankles). It works on any R15 body (blocky, default or Rthro). The game must use R15 avatars.' },
+};
+let RIG = RIGS.R6;
+function setRig(name) { RIG = RIGS[name] || RIGS.R6; }
+const baseDefs = () => RIG.base();
 function extraArmDef(k) {
   const sx = k % 2 === 1 ? 1 : -1, drop = k <= 2 ? 0.6 : 1.1, r = sx > 0 ? RIGHT : LEFT;
   return { name: `Extra Arm ${k}`, kind: 'extra', side: sx, size: [1, 2, 1], parent: 'Torso',
@@ -56,7 +99,7 @@ const PROPS = {
 };
 function propDef(name, type, parent) {
   const p = PROPS[type];
-  return { name, kind: 'prop', propType: type, size: p.size, parent, c0: cf(0, -1, 0, IDENT), c1: cf(...p.grip, IDENT), joint: p.grip.slice(), reach: [0, 0, -1], layout: null };
+  return { name, kind: 'prop', propType: type, size: p.size, parent, c0: cf(0, RIG.gripY, 0, IDENT), c1: cf(...p.grip, IDENT), joint: p.grip.slice(), reach: [0, 0, -1], layout: null };
 }
 function finishDef(d) { d.c0i = d.c0.clone().invert(); d.c1i = d.c1.clone().invert(); d.restRel = d.c0.clone().multiply(d.c1i); return d; }
 
@@ -70,7 +113,7 @@ function partsFromList(list) {
   const out = baseDefs(), names = new Set(out.map(d => d.name));
   for (const e of Array.isArray(list) ? list.slice(0, 40) : []) {
     let d = null;
-    if (e && e.kind === 'extra') { const k = safeInt(e.k, 1, 4, 0); if (k) d = extraArmDef(k); }
+    if (e && e.kind === 'extra') { const k = safeInt(e.k, 1, 4, 0); if (k && RIG.extraArms) d = extraArmDef(k); }
     else if (e && e.kind === 'prop') {
       const name = safePart(e.name), parent = safePart(e.parent);
       if (name && names.has(parent) && Object.hasOwn(PROPS, e.type)) d = propDef(name, e.type, parent);
@@ -81,13 +124,13 @@ function partsFromList(list) {
 }
 const children = n => order.filter(c => defs[c].parent === n);
 function descendants(n) { const out = [n]; for (const c of children(n)) out.push(...descendants(c)); return out; }
-function restWorld(n, P) { const d = defs[n]; return d.parent ? P[d.parent].clone().multiply(d.restRel) : d.restRel.clone(); }
+function restWorld(n, P) { const d = defs[n]; return (d.parent ? P[d.parent].clone() : RIG.hrp.clone()).multiply(d.restRel); }
 function restPose() { const P = {}; for (const n of order) P[n] = restWorld(n, P); return P; }
 const clonePose = P => Object.fromEntries(Object.keys(P).map(n => [n, P[n].clone()]));
 function transformsFromWorlds(W) {
   const T = {};
   for (const n of order) {
-    const d = defs[n], parent = d.parent ? W[d.parent] : new M4();
+    const d = defs[n], parent = d.parent ? W[d.parent] : RIG.hrp;
     T[n] = d.c0i.clone().multiply(parent.clone().invert()).multiply(W[n]).multiply(d.c1);
   }
   return T;
@@ -95,7 +138,7 @@ function transformsFromWorlds(W) {
 function worldsFromTransforms(T) {
   const W = {};
   for (const n of order) {
-    const d = defs[n], parent = d.parent ? W[d.parent] : new M4();
+    const d = defs[n], parent = d.parent ? W[d.parent] : RIG.hrp;
     W[n] = parent.clone().multiply(d.c0).multiply(T[n] || new M4()).multiply(d.c1i);
   }
   return W;
@@ -114,7 +157,7 @@ const samePose = (a, b) => a.elements.every((v, k) => Math.abs(v - b.elements[k]
 const samePoseAll = (A_, B_) => order.every(n => samePose(A_[n], B_[n]));
 // "Test for Roblox": slide the whole body so the torso is over the centre spot (keeps pose, lean and height)
 function centered(P) {
-  const t = new V3().setFromMatrixPosition(P.Torso), M = new M4().makeTranslation(-t.x, 0, -t.z), out = {};
+  const t = new V3().setFromMatrixPosition(P[RIG.root]), M = new M4().makeTranslation(-t.x, 0, -t.z), out = {};
   for (const n of Object.keys(P)) out[n] = M.clone().multiply(P[n]);
   return out;
 }
@@ -194,6 +237,8 @@ const upperTex = mkTex(upperCanvas), lowerTex = mkTex(lowerCanvas), headTex = mk
 const DEFAULT_LOOK = { colors: { head: 'f5cd30', torso: '0d69ac', rightArm: 'f5cd30', leftArm: 'f5cd30', rightLeg: 'a4bd47', leftLeg: 'a4bd47' }, images: {} };
 let look = DEFAULT_LOOK;
 const headSideMat = new THREE.MeshLambertMaterial({ color: 0xf5cd30 });
+const plainMats = {};   // colour key -> material, for parts drawn in a plain body colour (R15)
+const plainMat = key => plainMats[key] || (plainMats[key] = new THREE.MeshLambertMaterial({ color: '#' + (look.colors[key] || DEFAULT_LOOK.colors[key]) }));
 function drawLook(L) {
   const col = k => '#' + (L.colors[k] || DEFAULT_LOOK.colors[k]);
   const fillRects = (g, layout, color) => { g.fillStyle = color; for (const r of Object.values(layout)) g.fillRect(r.x - 1, r.y - 1, r.w + 2, r.h + 2); };
@@ -216,6 +261,7 @@ function drawLook(L) {
     g.strokeStyle = '#222'; g.lineWidth = 12; g.lineCap = 'round'; g.beginPath(); g.arc(128, 140, 52, 0.2 * Math.PI, 0.8 * Math.PI); g.stroke();
   }
   headSideMat.color.set(col('head'));
+  for (const [k, m] of Object.entries(plainMats)) m.color.set(col(k));
   upperTex.needsUpdate = lowerTex.needsUpdate = headTex.needsUpdate = true;
 }
 drawLook(look);
@@ -227,6 +273,7 @@ function makeMesh(d, style) {
   if (style === 'ghostPrev' || style === 'ghostNext') mat = new THREE.MeshBasicMaterial({ color: style === 'ghostPrev' ? 0xff4d6d : 0x2fbf5b, transparent: true, opacity: 0.22, depthWrite: false });
   else if (style === 'dummy') mat = new THREE.MeshLambertMaterial({ color: 0xa3a8b3 });
   else if (d.kind === 'prop') mat = new THREE.MeshLambertMaterial({ color: PROPS[d.propType].color, emissive: d.propType === 'ball' ? 0x8a2a00 : 0x000000 });
+  else if (d.layout && d.layout.startsWith('c:')) mat = plainMat(d.layout.slice(2));
   else if (d.layout === 'head') mat = [headSideMat, headSideMat, headSideMat, headSideMat, headSideMat, new THREE.MeshLambertMaterial({ map: headTex })];
   else { templateUV(geo, d.size, LAYOUT[d.layout]); mat = new THREE.MeshLambertMaterial({ map: d.layout === 'rleg' || d.layout === 'lleg' ? lowerTex : upperTex }); }
   const mesh = new THREE.Mesh(geo, mat);
@@ -257,16 +304,18 @@ class Body {
 const body = new Body('main'), ghostPrev = new Body('ghostPrev'), ghostNext = new Body('ghostNext'), dummy = new Body('dummy');
 function syncBodies() {
   for (const b of [body, ghostPrev, ghostNext]) {
-    for (const n of Object.keys(b.meshes)) if (defs[n] && b.meshes[n].userData.def && b.meshes[n].userData.def.propType !== defs[n].propType) { scene.remove(b.meshes[n]); delete b.meshes[n]; }
+    for (const n of Object.keys(b.meshes)) { const old = b.meshes[n].userData.def;
+      if (defs[n] && old && (old.propType !== defs[n].propType || old.layout !== defs[n].layout || old.size.join() !== defs[n].size.join())) { scene.remove(b.meshes[n]); delete b.meshes[n]; } }
     b.sync(order);
     for (const n of order) b.meshes[n].userData.def = defs[n];
   }
 }
-dummy.sync(BASE);
+dummy.sync(R6_BASE);
 syncBodies();
 function placeDummy() {
-  const P = {}, R = restPose(), base = new M4().makeTranslation(0, 0, -scene3.dummyDist).multiply(new M4().makeRotationY(Math.PI));
-  for (const n of BASE) P[n] = base.clone().multiply(R[n]);
+  const keepRig = RIG; setRig('R6'); const R = r6Defs().reduce((P, d) => { finishDef(d); P[d.name] = d.parent ? P[d.parent].clone().multiply(d.restRel) : d.restRel.clone(); return P; }, {}); setRig(keepRig.name);
+  const P = {}, base = new M4().makeTranslation(0, 0, -scene3.dummyDist).multiply(new M4().makeRotationY(Math.PI));
+  for (const n of R6_BASE) P[n] = base.clone().multiply(R[n]);
   dummy.show(P, scene3.dummy);
 }
 const viewPose = P => testMode ? centered(P) : P;
@@ -328,7 +377,7 @@ function placeGizmo() {
 // ------------------------------------------------------------------ mirroring helpers
 const S_MIRROR = new M4().makeScale(-1, 1, 1);
 function partnerOf(n) {
-  if (MIRROR_BASE[n]) return MIRROR_BASE[n];
+  if (RIG.mirror[n]) return RIG.mirror[n];
   const m = /^Extra Arm (\d)$/.exec(n);
   if (m) { const k = +m[1], p = `Extra Arm ${k % 2 ? k + 1 : k - 1}`; return defs[p] ? p : null; }
   return null;
@@ -336,7 +385,7 @@ function partnerOf(n) {
 // put the partner of n where n would be if mirrored across the torso's own middle
 function mirrorPartInto(P, n) {
   const p = partnerOf(n); if (!p) return;
-  const T = P.Torso, rel = T.clone().invert().multiply(P[n]);
+  const T = P[RIG.root], rel = T.clone().invert().multiply(P[n]);
   placePart(P, p, T.clone().multiply(S_MIRROR.clone().multiply(rel).multiply(S_MIRROR)));
 }
 function mirrorPose(P) {
@@ -352,7 +401,7 @@ function mirrorPose(P) {
 }
 function placePart(P, n, W, carry = true) {
   const delta = W.clone().multiply(P[n].clone().invert());
-  const list = carry ? (n === 'Torso' ? order.slice() : descendants(n)) : [n];
+  const list = carry ? (n === RIG.root ? order.slice() : descendants(n)) : [n];
   for (const k of list) P[k] = delta.clone().multiply(P[k]);
 }
 
@@ -387,7 +436,7 @@ function ringVector() {
   const t = drag.pivot.clone().sub(o).dot(n) / dn;
   return o.clone().addScaledVector(d, t).sub(drag.pivot);
 }
-const movedParts = (n, altKey) => altKey ? [n] : n === 'Torso' ? order.slice() : descendants(n);
+const movedParts = (n, altKey) => altKey ? [n] : n === RIG.root ? order.slice() : descendants(n);
 renderer.domElement.addEventListener('pointerdown', e => {
   hideMenu();
   if (e.button === 2) { rdown = { x: e.clientX, y: e.clientY }; return; }
@@ -429,7 +478,7 @@ renderer.domElement.addEventListener('pointermove', e => {
     M = new M4().makeTranslation(p.x, p.y, p.z).multiply(new M4().makeRotationAxis(drag.axisW, a)).multiply(new M4().makeTranslation(-p.x, -p.y, -p.z));
   }
   for (const n of drag.parts) P[n] = M.clone().multiply(drag.base[n]);
-  if (liveMirror && selected !== 'Torso' && partnerOf(selected)) mirrorPartInto(P, selected);
+  if (liveMirror && selected !== RIG.root && partnerOf(selected)) mirrorPartInto(P, selected);
   body.show(viewPose(P));
 });
 renderer.domElement.addEventListener('pointerup', e => {
@@ -464,7 +513,7 @@ function select(n) {
   $('sel').style.display = selected ? 'block' : 'none';
   if (selected) {
     $('selName').textContent = selected;
-    $('carryNote').textContent = selected === 'Torso' ? 'Moves the whole body. Hold Alt for torso only.'
+    $('carryNote').textContent = selected === RIG.root ? 'Moves the whole body. Hold Alt to move only this part.'
       : children(selected).length ? 'Things held in this part move with it. Hold Alt to move only this part.' : '';
     $('carryNote').style.display = $('carryNote').textContent ? 'flex' : 'none';
     $('pastePart').disabled = !partClip || !defs[partClip.name];
@@ -488,7 +537,7 @@ seg('axesSeg', v => axesMode = v);
 function resetPart(n) {
   record();
   const P = frames[cur].P;
-  if (n === 'Torso') frames[cur].P = restPose(); else placePart(P, n, restWorld(n, P));
+  if (n === RIG.root) frames[cur].P = restPose(); else placePart(P, n, restWorld(n, P));
   changed();
 }
 function copyPart(n) {
@@ -528,12 +577,13 @@ const normMarker = m => {
 const serFrame = f => ({ P: serPose(f.P), hold: f.hold, markers: f.markers.map(normMarker) });
 const deserFrame = f => ({ P: deserPose(f && f.P), hold: safeInt(f && f.hold, 1, 999, 1), markers: (Array.isArray(f && f.markers) ? f.markers.slice(0, 20) : []).map(normMarker) });
 function serProject() {
-  return { v: 3, id: project.id, name: project.name, created: project.created, updated: Date.now(), fps: project.fps, smooth: project.smooth,
+  return { v: 3, rig: RIG.name, id: project.id, name: project.name, created: project.created, updated: Date.now(), fps: project.fps, smooth: project.smooth,
            avatar: project.avatar || '', parts: extraDefsList(), guide: project.guide || null, A, cur,
            anims: project.anims.map(a => ({ id: a.id, name: a.name, type: a.type, loop: a.loop, priority: a.priority, touched: !!a.touched, frames: a.frames.map(serFrame) })),
            sounds: project.sounds || {} };
 }
 function deserProject(o) {
+  setRig(o.rig === 'R15' ? 'R15' : 'R6');
   setParts(partsFromList(o.parts)); syncBodies();
   const sounds = {};
   if (o.sounds && typeof o.sounds === 'object') for (const [k, v] of Object.entries(o.sounds).slice(0, 50)) { const a = safeAudio(v); if (a) sounds[String(k).replace(/[^a-z0-9]/g, '').slice(0, 16)] = a; }
@@ -541,7 +591,7 @@ function deserProject(o) {
     id: uid(), name: safeName(a.name) || 'Animation', type: Object.hasOwn(ANIM_TYPES, a.type) ? a.type : 'other', loop: !!a.loop,
     priority: PRIORITIES.includes(+a.priority) ? +a.priority : 2, touched: !!a.touched, frames: a.frames.slice(0, 2000).map(deserFrame) }));
   if (!anims.length) throw new Error('no animations');
-  return { id: typeof o.id === 'string' ? (o.id.replace(/[^a-z0-9]/g, '').slice(0, 16) || uid()) : uid(), name: safeName(o.name) || 'Animation',
+  return { rig: RIG.name, id: typeof o.id === 'string' ? (o.id.replace(/[^a-z0-9]/g, '').slice(0, 16) || uid()) : uid(), name: safeName(o.name) || 'Animation',
            created: +o.created || Date.now(), fps: FPS_LIST.includes(+o.fps) ? +o.fps : 12, smooth: o.smooth !== false,
            avatar: '', guide: o.guide && o.guide.active ? { active: true } : null, sounds, anims,
            _A: safeInt(o.A, 0, anims.length - 1, 0), _cur: safeInt(o.cur, 0, 1e6, 0) };
@@ -738,7 +788,7 @@ function feetOnGround() {
   for (const i of targets()) {
     const P = frames[i].P;
     let low = Infinity;
-    for (const n of ['Right Leg', 'Left Leg']) for (const x of [-0.5, 0.5]) for (const z of [-0.5, 0.5]) low = Math.min(low, new V3(x, -1, z).applyMatrix4(P[n]).y);
+    for (const [n, hx, hy, hz] of RIG.feet) for (const x of [-hx, hx]) for (const z of [-hz, hz]) low = Math.min(low, new V3(x, -hy, z).applyMatrix4(P[n]).y);
     const M = new M4().makeTranslation(0, -3 - low, 0);
     for (const n of order) P[n] = M.clone().multiply(P[n]);
   }
@@ -1011,10 +1061,12 @@ $('tools').onclick = e => { const r = e.currentTarget.getBoundingClientRect(); s
 // ------------------------------------------------------------------ parts panel
 function refreshPartsPanel() {
   if (!project) return;
-  const holders = order.filter(n => /Arm/.test(n));
+  const holders = [...RIG.holders, ...order.filter(n => defs[n].kind === 'extra')];
   const sel = $('propHolder'), keep = sel.value;
   sel.innerHTML = holders.map(n => `<option>${escH(n)}</option>`).join('');
-  sel.value = holders.includes(keep) ? keep : 'Right Arm';
+  sel.value = holders.includes(keep) ? keep : holders[0];
+  $('addArm').parentElement.style.display = RIG.extraArms ? 'flex' : 'none';
+  $('addArm').parentElement.nextElementSibling.textContent = RIG.extraArms ? 'Up to 4. They are named Extra Arm 1–4 and sit below the normal arms. Pose them like any arm.' : 'Extra arms are only available on R6 bodies.';
   const extras = order.filter(n => defs[n].kind !== 'base');
   const list = $('partList');
   list.innerHTML = extras.length ? '' : '<p>None yet.</p>';
@@ -1025,7 +1077,7 @@ function refreshPartsPanel() {
     r.querySelector('button').onclick = () => removePart(n);
     list.appendChild(r);
   }
-  $('addArm').disabled = order.filter(n => defs[n].kind === 'extra').length >= 4;
+  $('addArm').disabled = !RIG.extraArms || order.filter(n => defs[n].kind === 'extra').length >= 4;
 }
 function addPart(def, initial) {
   record();
@@ -1047,8 +1099,8 @@ $('addArm').onclick = () => {
   if (k > 4) return;
   const d = finishDef(extraArmDef(k));
   addPart(d, P => {
-    const W = P.Torso.clone().multiply(d.restRel);
-    const socket = new V3(...d.joint).applyMatrix4(W), axis = new V3(0, 0, 1).transformDirection(P.Torso);
+    const W = P[RIG.root].clone().multiply(d.restRel);
+    const socket = new V3(...d.joint).applyMatrix4(W), axis = new V3(0, 0, 1).transformDirection(P[RIG.root]);
     return new M4().makeTranslation(socket.x, socket.y, socket.z).multiply(new M4().makeRotationAxis(axis, d.side * 0.5))
       .multiply(new M4().makeTranslation(-socket.x, -socket.y, -socket.z)).multiply(W);
   });
@@ -1151,7 +1203,8 @@ $('avReset').onclick = () => { look = DEFAULT_LOOK; if (project) project.avatar 
 // ================================================================== animation card, guide, Test for Roblox
 function riseInfo(a) {
   let best = null;
-  a.frames.forEach((f, i) => { const y = f.P.Torso.elements[13]; if (y > 1 && (!best || y > best.rise)) best = { i, rise: y }; });
+  const rest = restPose()[RIG.root].elements[13];
+  a.frames.forEach((f, i) => { const y = f.P[RIG.root].elements[13] - rest; if (y > 1 && (!best || y > best.rise)) best = { i, rise: y }; });
   return best;
 }
 function refreshAnimCard() {
@@ -1233,11 +1286,10 @@ function addAnimAfter() {
 // ================================================================== guided draw-to-pose
 const drawLayer = $('drawLayer'), dctx = drawLayer.getContext('2d');
 let drawSteps = [], drawStep = 0, stroke = null, strokes = [];
-const DRAW_TEXT = { Torso: 'from the <b>neck</b> down to the <b>hips</b>', Head: 'from the <b>neck</b> up to the <b>top of the head</b>' };
 function drawPrompt() {
   const n = drawSteps[drawStep];
-  const how = DRAW_TEXT[n] || (/Leg/.test(n) ? 'from the <b>hip</b> to the <b>foot</b>' : 'from the <b>shoulder</b> to the <b>hand</b>');
-  $('drawText').innerHTML = `${drawStep + 1}/${drawSteps.length} · Draw the <b>${escH(n.toUpperCase())}</b> ${how}`;
+  const how = (RIG.draw.find(x => x[0] === n) || [0, 'from the <b>shoulder</b> to the <b>hand</b>'])[1];
+  $('drawText').innerHTML = `${drawStep + 1}/${drawSteps.length} · Draw the <b>${escH((n === RIG.root ? 'Torso' : n.replace(/([a-z])([A-Z])/g, '$1 $2')).toUpperCase())}</b> ${how}`;
   select(n);
 }
 function startDraw() {
@@ -1245,7 +1297,7 @@ function startDraw() {
   if (testMode) setTest(false);
   stopPlay(); closePanels(); record();
   drawing = true; drawStep = 0; strokes = [];
-  drawSteps = ['Torso', 'Head', 'Right Arm', 'Left Arm', ...order.filter(n => defs[n].kind === 'extra'), 'Right Leg', 'Left Leg'];
+  drawSteps = RIG.draw.flatMap(x => x === 'extras' ? order.filter(n => defs[n].kind === 'extra') : [x[0]]);
   drawLayer.style.display = 'block'; $('drawBanner').style.display = 'flex'; $('draw').classList.add('on');
   controls.enabled = false; sizeDrawLayer(); redrawStrokes(); drawPrompt();
   $('hint').textContent = 'Tip: use the Side or Front view. Each line sets one body part; fine-tune with the rings after.';
@@ -1269,15 +1321,15 @@ function screenToWorld(p) {
   const r = drawLayer.getBoundingClientRect();
   ndc.set((p.x / r.width) * 2 - 1, -(p.y / r.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
-  const center = new V3().applyMatrix4(frames[cur].P.Torso), n = camera.getWorldDirection(new V3());
+  const center = new V3().applyMatrix4(frames[cur].P[RIG.root]), n = camera.getWorldDirection(new V3());
   return ray.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(n, center), new V3());
 }
 function applyStroke(n, a, b) {
   const P = frames[cur].P, d = defs[n];
   const q = new Q(), t = new V3(), s = new V3(); P[n].decompose(t, q, s);
-  if (n === 'Torso') {
+  if (n === RIG.root) {
     const up = a.clone().sub(b).normalize(), cu = new V3(0, 1, 0).applyQuaternion(q);
-    placePart(P, 'Torso', new M4().compose(a.clone().add(b).multiplyScalar(0.5), new Q().setFromUnitVectors(cu, up).multiply(q), new V3(1, 1, 1)));
+    placePart(P, n, new M4().compose(a.clone().add(b).multiplyScalar(0.5), new Q().setFromUnitVectors(cu, up).multiply(q), new V3(1, 1, 1)));
   } else {
     const dir = b.clone().sub(a).normalize(), now = new V3(...d.reach).applyQuaternion(q).normalize();
     const nq = new Q().setFromUnitVectors(now, dir).multiply(q);
@@ -1318,7 +1370,7 @@ function buildRbxmx(a, center) {
     return '<CoordinateFrame name="CFrame">' + v.map((x, k) => `<${tags[k]}>${(Math.abs(x) < 1e-9 ? 0 : x).toFixed(6)}</${tags[k]}>`).join('') + '</CoordinateFrame>';
   };
   const pose = (part, T) => {
-    const kids = part === 'HumanoidRootPart' ? ['Torso'] : children(part);
+    const kids = part === 'HumanoidRootPart' ? [RIG.root] : children(part);
     const m = part === 'HumanoidRootPart' ? new M4() : T[part];
     return `<Item class="Pose" referent="${nxt()}"><Properties>${cfx(m)}<token name="EasingDirection">0</token>` +
       `<token name="EasingStyle">${ease}</token><string name="Name">${esc(part)}</string><float name="Weight">1</float></Properties>` +
@@ -1422,10 +1474,10 @@ const TYPE_HOW = {
 function aiPrompt(list, center) {
   const L = [];
   const many = list.length > 1, told = new Set();
-  L.push(`I made ${many ? 'these R6 animations' : 'this R6 animation'} with R6 Flipbook and exported ${many ? 'them as .rbxmx files' : 'it as a .rbxmx file'} (Roblox KeyframeSequence). Please help me put ${many ? 'them' : 'it'} into my Roblox game.`);
+  L.push(`I made ${many ? `these ${RIG.name} animations` : `this ${RIG.name} animation`} with R6 Flipbook and exported ${many ? 'them as .rbxmx files' : 'it as a .rbxmx file'} (Roblox KeyframeSequence). Please help me put ${many ? 'them' : 'it'} into my Roblox game.`);
   L.push('');
   L.push(`Facts about the file${many ? 's' : ''}:`);
-  L.push('- Rig: standard Roblox R6 (Torso, Head, Right Arm, Left Arm, Right Leg, Left Leg, joined by the usual R6 Motor6Ds under HumanoidRootPart). The game must use R6 avatars.');
+  L.push('- Rig: ' + RIG.describe);
   L.push(`- ${center ? 'Exported with "Center the torso": the body stays on the character\'s spot, so the Humanoid does the moving.' : 'Exported with "Keep motion": the body moves around inside the animation itself.'}`);
   L.push(`- Speed: ${fps()} frames per second. Easing: ${smooth() ? 'Linear (smooth)' : 'Constant (snappy, flipbook style)'}.`);
   L.push('');
@@ -1636,7 +1688,7 @@ async function makeShareLink() {
     });
     return { n: a.name, t: a.type, l: a.loop ? 1 : 0, r: a.priority, h: a.frames.map(f => f.hold), m, d };
   });
-  const json = JSON.stringify({ v: 1, q: QS, n: project.name, f: project.fps, s: project.smooth ? 1 : 0, p: extraDefsList(), k: per, a: anims });
+  const json = JSON.stringify({ v: 1, q: QS, g: RIG.name, n: project.name, f: project.fps, s: project.smooth ? 1 : 0, p: extraDefsList(), k: per, a: anims });
   const z = await streamBytes(new Blob([new TextEncoder().encode(json)]).stream().pipeThrough(new CompressionStream('deflate-raw')), 5e6);
   return location.origin + location.pathname + '#share=' + b64url(z);
 }
@@ -1660,7 +1712,7 @@ async function openSharedLink() {
     const raw = unb64url(m[1]);
     const o = JSON.parse(new TextDecoder().decode(await streamBytes(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw')), 4e6)));
     if (!o || o.v !== 1 || !Array.isArray(o.a)) throw new Error('bad');
-    setParts(partsFromList(o.p)); syncBodies();
+    setRig(o.g === 'R15' ? 'R15' : 'R6'); setParts(partsFromList(o.p)); syncBodies();
     if (o.k !== order.length) throw new Error('parts');
     const per = order.length * 7;   // rotations are normalised, so their stored scale (o.q) does not matter
     const anims = o.a.slice(0, 20).map(a => {
@@ -1680,7 +1732,7 @@ async function openSharedLink() {
       for (const mk of Array.isArray(a.m) ? a.m.slice(0, 200) : []) if (Array.isArray(mk) && frames[mk[0]]) frames[mk[0]].markers.push(mk[2] ? { name: mk[1], sound: mk[2] } : { name: mk[1] });
       return { name: a.n, type: a.t, loop: !!a.l, priority: a.r, frames };
     });
-    const p = deserProject({ v: 3, name: o.n, fps: o.f, smooth: !!o.s, parts: o.p, anims });
+    const p = deserProject({ v: 3, rig: RIG.name, name: o.n, fps: o.f, smooth: !!o.s, parts: o.p, anims });
     p.id = uid(); p.name = (p.name + ' (shared)').slice(0, 48);
     const frames_ = p.anims.reduce((s, a) => s + a.frames.length, 0);
     if (!confirm(`Someone shared an animation with you:\n\n"${p.name}" (${p.anims.length > 1 ? p.anims.length + ' linked parts, ' : ''}${frames_} frames)\n\nOpen it? It will be added to your projects.`)) { showHome(); return; }
@@ -1720,10 +1772,14 @@ function rbxmxToAnim(text, fileName) {
   }
   if (!keys.length) throw new Error('no keyframes');
   keys.sort((a, b) => a.t - b.t);
+  // which body the file is for; a project holds one body type
+  const fileRig = Object.hasOwn(parentOf, 'LowerTorso') || Object.hasOwn(parentOf, 'UpperTorso') ? 'R15' : 'R6';
+  if (project && fileRig !== RIG.name) throw new Error(`This file is for ${fileRig} bodies, but this project is ${RIG.name}. Open it from the Projects page instead.`);
+  if (!project && fileRig !== RIG.name) { setRig(fileRig); setParts(baseDefs()); syncBodies(); }
   // make sure this project has any extra parts the file uses
   const need = [];
   for (const [n, parent] of Object.entries(parentOf)) {
-    if (BASE.includes(n) || defs[n]) continue;
+    if (defs[n]) continue;
     const m = /^Extra Arm (\d)$/.exec(n);
     if (m) need.push({ kind: 'extra', k: +m[1] });
     else if (parent && parent !== 'HumanoidRootPart' && safePart(n) === n) need.push({ kind: 'prop', name: n, type: /knife|blade|sword/i.test(n) ? 'knife' : /ball|fire/i.test(n) ? 'ball' : 'block', parent });
@@ -1748,19 +1804,20 @@ function rbxmxToAnim(text, fileName) {
     out.push({ P: poses[i], hold: slots, markers: keys[i].markers });
   }
   const type = priority === 0 ? 'idle' : /run/i.test(seqName) ? 'run' : /walk/i.test(seqName) ? 'walk' : /jump|fall|land/i.test(seqName) ? 'jump' : priority >= 2 ? 'combat' : 'other';
-  return { anim: { id: uid(), name: seqName, type, loop, priority, frames: out, touched: true }, fps: rate_, smooth: !constant };
+  return { anim: { id: uid(), name: seqName, type, loop, priority, frames: out, touched: true }, fps: rate_, smooth: !constant, rig: RIG.name };
 }
 function projectFromOld(o, name) {          // v1 / v2 single-animation projects
-  setParts(partsFromList(o.v === 2 ? o.parts : [])); syncBodies();
+  setRig('R6'); setParts(partsFromList(o.v === 2 ? o.parts : [])); syncBodies();
   const fr = o.frames.slice(0, 2000).map(f => f && f.P ? deserFrame(f) : newFrame(deserPose(f)));
   const ex = o.export || {};
   const pr = PRIORITIES.includes(+ex.priority) ? +ex.priority : 2; name = safeName(name); ex.name = safeName(ex.name);
-  return { id: uid(), name: name || ex.name || 'My animation', created: Date.now(), fps: FPS_LIST.includes(+o.fps) ? +o.fps : 12, smooth: o.smooth !== false, avatar: '', guide: null, sounds: {},
+  return { id: uid(), rig: 'R6', name: name || ex.name || 'My animation', created: Date.now(), fps: FPS_LIST.includes(+o.fps) ? +o.fps : 12, smooth: o.smooth !== false, avatar: '', guide: null, sounds: {},
            anims: [{ id: uid(), name: ex.name || name || 'Animation', type: pr === 0 ? 'idle' : pr === 1 ? 'run' : 'other', loop: ex.loop !== false, priority: pr, frames: fr, touched: true }] };
 }
 
 // ================================================================== opening, saving, projects home
 async function openProject(p, fresh) {
+  if (p.rig && p.rig !== RIG.name) { setRig(p.rig); setParts(partsFromList(p.parts || [])); syncBodies(); }
   project = p; undoStack.length = 0; redoStack.length = 0; select(null);
   if (testMode) setTest(false);
   thumbStore.clear();
@@ -1825,9 +1882,9 @@ $('fileIn').onchange = async e => {
         useAnim(project.anims.length - 1, 0); saveSoon();
         toast(`Added "${r.anim.name}" (${r.anim.frames.length} frames) to this project`);
       } else {
-        setParts(baseDefs()); syncBodies();
+        setRig('R6'); setParts(baseDefs()); syncBodies();
         const r = rbxmxToAnim(text, f.name.replace(/\.rbxmx$/i, ''));
-        await openProject({ id: uid(), name: r.anim.name, created: Date.now(), fps: r.fps, smooth: r.smooth, avatar: '', guide: null, sounds: {}, anims: [r.anim] }, true);
+        await openProject({ id: uid(), rig: r.rig, name: r.anim.name, created: Date.now(), fps: r.fps, smooth: r.smooth, avatar: '', guide: null, sounds: {}, anims: [r.anim] }, true);
         toast(`Imported ${f.name}`);
       }
     } else {
@@ -1840,7 +1897,7 @@ $('fileIn').onchange = async e => {
       if (project) await saveNow();
       await openProject(p, true); toast(`Opened ${f.name}`);
     }
-  } catch (err) { toast('That file could not be opened'); if (project) refresh(); }
+  } catch (err) { toast(/bodies/.test(err.message) ? err.message : 'That file could not be opened'); if (project) refresh(); }
 };
 
 // new animation flow
@@ -1854,7 +1911,8 @@ const FOLLOW = {
   other: [{ q: 'Should it loop (repeat over and over)?', key: 'loop' }],
 };
 const TYPE_BLURB = { run: 'with an optional charge-up', walk: 'with an optional start', idle: 'standing still, looping', jump: 'take-off, air, landing', combat: 'punches, kicks, skills', other: 'anything else' };
-let newType = 'run', answers = {};
+let newType = 'run', answers = {}, newRig = 'R6';
+seg('newRigSeg', v => { newRig = v; });
 function renderNew() {
   $('typeGrid').innerHTML = Object.entries(ANIM_TYPES).map(([k, t]) =>
     `<button class="typeBtn${k === newType ? ' on' : ''}" data-t="${k}">${t.label}<small>${TYPE_BLURB[k]}</small></button>`).join('');
@@ -1885,13 +1943,13 @@ function planAnims() {
   const f = FOLLOW[newType][0];
   return answers.q0 ? f.yes : f.no;
 }
-$('newBtn').onclick = () => { newType = 'run'; answers = {}; $('newName').value = 'My run'; $('newFps').value = String(settings.defFps); renderNew(); $('newModal').style.display = 'flex'; };
+$('newBtn').onclick = () => { newType = 'run'; answers = {}; [...$('newRigSeg').children].forEach(c => c.classList.toggle('on', c.dataset.v === newRig)); $('newName').value = 'My run'; $('newFps').value = String(settings.defFps); renderNew(); $('newModal').style.display = 'flex'; };
 $('newCancel').onclick = () => $('newModal').style.display = 'none';
 $('newGo').onclick = async () => {
   $('newModal').style.display = 'none';
-  setParts(baseDefs()); syncBodies();
+  setRig(newRig); setParts(baseDefs()); syncBodies();
   const plan = planAnims();
-  const p = { id: uid(), name: $('newName').value.trim() || 'My animation', created: Date.now(), fps: +$('newFps').value, smooth: true, avatar: '', sounds: {},
+  const p = { id: uid(), rig: newRig, name: $('newName').value.trim() || 'My animation', created: Date.now(), fps: +$('newFps').value, smooth: true, avatar: '', sounds: {},
               guide: plan.length > 1 ? { active: true } : null,
               anims: plan.map(([name, type, loop, priority]) => ({ ...newAnim(name, type), loop, priority })) };
   await openProject(p, true);
@@ -1932,7 +1990,7 @@ $('pickFolder').onclick = chooseExportFolder;
 $('tourAgain').onclick = () => { closePanels(); if (project) startTour(); else { $('home').style.display = 'block'; toast('Open or start an animation first, then the tour runs'); settings.tourDone = false; saveSettings(); } };
 
 const TOUR = [
-  { el: null, text: '<b>Welcome to R6 Flipbook!</b> You make Roblox R6 animations frame by frame, like FlipaClip. This quick tour takes about 30 seconds.' },
+  { el: null, text: '<b>Welcome to R6 Flipbook!</b> You make Roblox R6 and R15 animations frame by frame, like FlipaClip. This quick tour takes about 30 seconds.' },
   { el: '#view', text: '<b>Pose the character.</b> Click any body part. Drag the <b>arrows</b> to move it and the <b>rings</b> to turn it. Drag empty space to spin the camera.' },
   { el: '#add', text: '<b>Add frames.</b> Press <b>+</b> to add the next frame. It starts as a copy, so you only change what moves.' },
   { el: '#play', text: '<b>Watch it.</b> Press play. You can slow it down or speed it up with Play speed.' },
