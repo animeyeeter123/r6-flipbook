@@ -1194,7 +1194,7 @@ async function loadAvatar(name) {
       (d.notes?.length ? ' ' + d.notes.join(' ') : '') + (got.length ? '' : ' (They wear no classic clothing, so Roblox shows plain colours on R6.)');
     if (project) { rethumbAll(); refresh(); saveSoon(); }
   } catch (err) {
-    $('avStatus').textContent = /fetch/i.test(err.message) ? 'The helper isn\'t running. Open the app with "Start R6 Flipbook".' : err.message;
+    $('avStatus').textContent = /fetch/i.test(err.message) ? 'The helper isn\'t running. Open the app with "Start RigFlip".' : err.message;
   }
   $('avLoad').disabled = false;
 }
@@ -1683,7 +1683,7 @@ const TYPE_HOW = {
 function aiPrompt(list, center) {
   const L = [];
   const many = list.length > 1, told = new Set();
-  L.push(`I made ${many ? `these ${RIG.name} animations` : `this ${RIG.name} animation`} with R6 Flipbook and exported ${many ? 'them as .rbxmx files' : 'it as a .rbxmx file'} (Roblox KeyframeSequence). Please help me put ${many ? 'them' : 'it'} into my Roblox game.`);
+  L.push(`I made ${many ? `these ${RIG.name} animations` : `this ${RIG.name} animation`} with RigFlip and exported ${many ? 'them as .rbxmx files' : 'it as a .rbxmx file'} (Roblox KeyframeSequence). Please help me put ${many ? 'them' : 'it'} into my Roblox game.`);
   L.push('');
   L.push(`Facts about the file${many ? 's' : ''}:`);
   L.push('- Rig: ' + RIG.describe);
@@ -1775,7 +1775,7 @@ function shareCanvas(w, h) {
     const fs = Math.max(11, Math.round(h / 30));
     g.font = `600 ${fs}px system-ui, sans-serif`; g.textAlign = 'right'; g.textBaseline = 'bottom';
     g.fillStyle = isDark() ? 'rgba(255,255,255,.55)' : 'rgba(0,0,0,.4)';
-    g.fillText('R6 Flipbook', w - fs * 0.8, h - fs * 0.6);
+    g.fillText('RigFlip', w - fs * 0.8, h - fs * 0.6);
   } };
 }
 // --- a small GIF maker (GIF89a, 256 colours, loops forever)
@@ -2199,7 +2199,7 @@ $('pickFolder').onclick = chooseExportFolder;
 $('tourAgain').onclick = () => { closePanels(); if (project) startTour(); else { $('home').style.display = 'block'; toast('Open or start an animation first, then the tour runs'); settings.tourDone = false; saveSettings(); } };
 
 const TOUR = [
-  { el: null, text: '<b>Welcome to R6 Flipbook!</b> You make Roblox R6 and R15 animations frame by frame, like FlipaClip. This quick tour takes about 30 seconds.' },
+  { el: null, text: '<b>Welcome to RigFlip!</b> You make Roblox R6 and R15 animations frame by frame, like FlipaClip. This quick tour takes about 30 seconds.' },
   { el: '#view', text: '<b>Pose the character.</b> Click any body part. Drag the <b>arrows</b> to move it and the <b>rings</b> to turn it. Drag empty space to spin the camera.' },
   { el: '#add', text: '<b>Add frames.</b> Press <b>+</b> to add the next frame. It starts as a copy, so you only change what moves.' },
   { el: '#draw', text: '<b>Draw.</b> Sketch a quick stick figure, or trace a person from a video. Click it any time and it explains how.' },

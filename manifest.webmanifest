@@ -1,7 +1,7 @@
 {
-  "name": "R6 Flipbook",
-  "short_name": "R6 Flipbook",
-  "description": "Frame-by-frame animation maker for Roblox R6 characters.",
+  "name": "RigFlip",
+  "short_name": "RigFlip",
+  "description": "Frame-by-frame animation maker for Roblox R6 and R15 characters.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

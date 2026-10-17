@@ -6,20 +6,20 @@
 <!-- Only this site's own files may run or be loaded; nothing is sent anywhere. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-xAtMlUiJe37621sVZN7FuCORWiODFlAt4m+/AXDdLiQ='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
-<title>R6 Flipbook</title>
-<meta name="description" content="Free frame-by-frame animation maker for Roblox R6 characters. Pose, flip through frames, export .rbxmx. Works offline.">
+<title>RigFlip</title>
+<meta name="description" content="RigFlip: free frame-by-frame animation maker for Roblox R6 and R15 characters. Pose, flip through frames, export .rbxmx. Works offline.">
 <meta name="theme-color" content="#f0507a">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<meta property="og:title" content="R6 Flipbook">
-<meta property="og:description" content="Free frame-by-frame animation maker for Roblox R6 characters. Like FlipaClip, but for R6. Works in your browser, no download.">
+<meta property="og:title" content="RigFlip">
+<meta property="og:description" content="Free frame-by-frame animation maker for Roblox R6 and R15 characters. Like FlipaClip, but for Roblox. Works in your browser, no download.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://animeyeeter123.github.io/r6-flipbook/">
 <meta property="og:image" content="https://animeyeeter123.github.io/r6-flipbook/icons/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <!--
-  R6 Flipbook - a frame-by-frame animation tool for standard Roblox R6 characters (like FlipaClip, for R6).
+  RigFlip - a frame-by-frame animation tool for Roblox R6 and R15 characters (like FlipaClip).
   Not made by or affiliated with Roblox Corporation.
   A project holds one or more linked animations (e.g. Run start -> Run). Every frame is its own pose.
   Exports Roblox KeyframeSequences (.rbxmx) using the standard R6 Motor6D joints.
@@ -308,7 +308,7 @@
   <p id="exportWhere"></p>
   <div class="row"><button class="small" id="pickFolder">Choose export folder…</button></div>
   <h4>About</h4>
-  <p>R6 Flipbook is free and open source. Your projects stay in this browser on your own computer; nothing is uploaded. Not made by or affiliated with Roblox.</p>
+  <p>RigFlip is free and open source. Your projects stay in this browser on your own computer; nothing is uploaded. Not made by or affiliated with Roblox.</p>
 </div>
 
 <div id="markerPop" class="panel card">
@@ -365,7 +365,7 @@
   <button class="choice" id="exKeep"><b>Keep motion</b><span>Exactly as you animated it, including moving across the floor. Use it for moves that should travel inside the animation, like a cutscene or an emote that steps forward and back.</span></button>
   <p id="exWhere"></p>
   <h4 style="margin:16px 0 4px;font-size:14px">Or share it</h4>
-  <div class="row" style="color:var(--ink)"><button class="small accent" id="shGif" title="An animated picture that plays in Discord">GIF</button><button class="small accent" id="shVid" title="A short video (MP4 or WebM)">Video</button><button class="small" id="shLink" title="A link that opens this animation in R6 Flipbook">Copy share link</button>
+  <div class="row" style="color:var(--ink)"><button class="small accent" id="shGif" title="An animated picture that plays in Discord">GIF</button><button class="small accent" id="shVid" title="A short video (MP4 or WebM)">Video</button><button class="small" id="shLink" title="A link that opens this animation in RigFlip">Copy share link</button>
     <select id="shSize" title="Picture size"><option value="small">Small</option><option value="medium" selected>Medium</option><option value="large">Large (HD)</option></select></div>
   <p>GIFs and videos use the current camera view. Turn on Test for Roblox first if you want the character to stay in place.</p>
   <div class="actions"><button class="ghost" id="exCancel">Cancel</button></div>
@@ -400,7 +400,7 @@
 <!-- use it with AI -->
 <div class="modal" id="aiModal"><div class="card" style="width:min(560px, calc(100% - 32px))">
   <h2 id="aiTitle">Exported! Want an AI to add it to your game?</h2>
-  <p style="font-size:13px;color:var(--ink)">R6 Flipbook files work with AI helpers (ChatGPT, Claude and others). Copy this message, paste it into your AI chat, and attach the exported .rbxmx file(s). It already explains what the animation is and how it should be used.</p>
+  <p style="font-size:13px;color:var(--ink)">RigFlip files work with AI helpers (ChatGPT, Claude and others). Copy this message, paste it into your AI chat, and attach the exported .rbxmx file(s). It already explains what the animation is and how it should be used.</p>
   <textarea id="aiText" readonly spellcheck="false" style="width:100%;height:240px;margin-top:10px;font:12px/1.4 ui-monospace,Consolas,monospace;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--soft);color:var(--ink);resize:vertical"></textarea>
   <p>Always read what an AI suggests before using it, and keep a backup of your game.</p>
   <div class="actions"><button class="ghost" id="aiClose">Close</button><button class="primary" id="aiCopy">Copy message</button></div>
@@ -435,7 +435,7 @@
 
 <!-- home: all projects -->
 <div id="home"><div class="wrap">
-  <header><h1>R6 <span>Flipbook</span></h1><button class="small" id="homeSettings">Settings</button></header>
+  <header><h1>Rig<span>Flip</span></h1><button class="small" id="homeSettings">Settings</button></header>
   <div class="homeActions">
     <button class="bigBtn" id="newBtn">＋ New animation</button>
     <button class="ghost" id="homeOpen">Open file…</button>

@@ -1,8 +1,8 @@
-// R6 Flipbook launcher for Windows.
-// Opens the R6 Flipbook website in its own app window using Microsoft Edge, which is built into Windows 10 and 11.
+// RigFlip launcher for Windows.
+// Opens the RigFlip website in its own app window using Microsoft Edge, which is built into Windows 10 and 11.
 // For safety it can only ever open this one address: it ignores anything passed to it, reads no files,
 // downloads nothing, needs no admin rights and changes no settings.
-// Build: C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /win32icon:R6Flipbook.ico /out:R6Flipbook.exe R6Flipbook.cs
+// Build: C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /target:winexe /win32icon:RigFlip.ico /out:RigFlip.exe RigFlip.cs
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -10,12 +10,12 @@ using System.Reflection;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-[assembly: AssemblyTitle("R6 Flipbook")]
-[assembly: AssemblyProduct("R6 Flipbook")]
-[assembly: AssemblyDescription("Opens the R6 Flipbook animation maker in its own window.")]
+[assembly: AssemblyTitle("RigFlip")]
+[assembly: AssemblyProduct("RigFlip")]
+[assembly: AssemblyDescription("Opens the RigFlip animation maker in its own window.")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 animeyeeter123. MIT licence.")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 static class Program
 {
@@ -27,8 +27,8 @@ static class Program
         string edge = FindEdge();
         if (edge == null)
         {
-            MessageBox.Show("R6 Flipbook needs Microsoft Edge, which comes with Windows.\n\nYou can also open it in any browser:\n" + AppUrl,
-                            "R6 Flipbook", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show("RigFlip needs Microsoft Edge, which comes with Windows.\n\nYou can also open it in any browser:\n" + AppUrl,
+                            "RigFlip", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         var start = new ProcessStartInfo(edge, "--app=" + AppUrl);
