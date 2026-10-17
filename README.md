@@ -37,6 +37,9 @@ Everything stays on your own computer. Projects are saved in your browser; nothi
 
 ## Updates
 
+**v1.5.1**
+- Extra safety checks
+
 **v1.5**
 - Dark look by default (Light is still in Settings)
 

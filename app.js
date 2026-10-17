@@ -697,7 +697,7 @@ function refresh() {
       d.className = 'frame' + (isCur ? ' cur' : '') + (isSel ? ' sel' : '');
       d.style.width = (100 + Math.min(f.hold - 1, 3) * 16) + 'px';
       const marks = f.markers.map(m => m.sound ? '♪' : '⚑ ' + m.name).join(' ');
-      d.innerHTML = `<img alt="" src="${th[i] || ''}"><span class="num">${i + 1}</span>` +
+      d.innerHTML = `<img alt="" src="${safeImg(th[i])}"><span class="num">${i + 1}</span>` +
         (f.hold > 1 ? `<span class="hold">×${f.hold}</span>` : '') + (marks ? `<span class="mark">${escH(marks)}</span>` : '');
       d.onclick = e => frameClick(k, i, e);
       d.oncontextmenu = e => { e.preventDefault(); stopPlay(); if (k !== A) useAnim(k, i); else if (!fsel.has(i)) { fsel = new Set(); goto(i); } showMenu(e.clientX, e.clientY, frameMenu()); };
@@ -2049,7 +2049,7 @@ async function showHome() {
   $('homeOld').style.display = store.get('r6flipbook') && !settings.oldImported ? 'inline-block' : 'none';
   for (const rec of list) {
     const c = document.createElement('div'); c.className = 'proj card';
-    c.innerHTML = `<img alt="" src="${rec.cover || ''}"><div class="meta"><b>${escH(rec.name)}</b><span>${escH(rec.kind || '')}</span><br><span>${new Date(rec.updated).toLocaleString()}</span></div>`;
+    c.innerHTML = `<img alt="" src="${safeImg(rec.cover)}"><div class="meta"><b>${escH(rec.name)}</b><span>${escH(rec.kind || '')}</span><br><span>${new Date(rec.updated).toLocaleString()}</span></div>`;
     const open = () => { try { openProject(deserProject(JSON.parse(rec.data))); } catch (e) { toast('That project could not be opened'); } };
     c.onclick = open;
     c.oncontextmenu = e => { e.preventDefault(); showMenu(e.clientX, e.clientY, [
